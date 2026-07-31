@@ -355,14 +355,11 @@ export function useBattleStorySession() {
     [userProviderConfig]
   );
   const { currentMode: providerCooldownMode } = providerCooldownConfig;
-  const cooldownMs =
-    providerCooldownMode === 'custom'
-      ? providerCooldownConfig.customDurationMs
-      : providerCooldownConfig.systemDurationMs;
-  const { isCooldown, remainingTime, startCooldown, otherRemainingTime } = useProviderModeCooldown({
+  const { isCooldown, remainingTime, startCooldown, otherRemainingTime, currentDurationMs } = useProviderModeCooldown({
     baseKey: ARENA_PROVIDER_COOLDOWN_BASE_KEY,
     ...providerCooldownConfig,
   });
+  const cooldownMs = currentDurationMs;
 
   useEffect(() => {
     activeSessionRef.current = activeSession;

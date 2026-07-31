@@ -63,6 +63,19 @@ describe('browser security headers', () => {
     expect(policy).toContain(`'unsafe-eval'`);
   });
 
+  test('内网 HTTP 自托管可关闭 HTTPS-only 响应头', () => {
+    const headers = buildStaticBrowserSecurityHeaders({
+      allowGoogleAnalytics: false,
+      allowTurnstile: true,
+      enableHttpsOnlyHeaders: false,
+      isProduction: true,
+    });
+    const policy = headers.find(header => header.key === 'Content-Security-Policy')?.value ?? '';
+
+    expect(headers.some(header => header.key === 'Strict-Transport-Security')).toBe(false);
+    expect(policy).not.toContain('upgrade-insecure-requests');
+  });
+
   test('HTTPS 跳转会尊重代理协议头且放过本地开发地址', () => {
     expect(
       shouldRedirectToHttps(new URL('http://mahoshojo.example.com/free'), new Headers()),
@@ -77,6 +90,14 @@ describe('browser security headers', () => {
 
     expect(
       shouldRedirectToHttps(new URL('http://localhost:3000/free'), new Headers()),
+    ).toBe(false);
+
+    expect(
+      shouldRedirectToHttps(new URL('http://192.168.1.10:3000/free'), new Headers()),
+    ).toBe(false);
+
+    expect(
+      shouldRedirectToHttps(new URL('http://26.208.231.39:3000/free'), new Headers()),
     ).toBe(false);
   });
 

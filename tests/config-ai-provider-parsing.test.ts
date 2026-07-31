@@ -44,4 +44,35 @@ describe('config ai provider parsing', () => {
       skipProbability: 0,
     });
   });
+
+  it('按 AI_PROVIDER_PRIORITY 重排供应商，同时保留未列出的供应商顺序', () => {
+    const providers = parseAIProvidersFromEnv({
+      AI_PROVIDER_PRIORITY: 'NewAPI_123nhh, HsnAPI',
+      AI_PROVIDERS_CONFIG: JSON.stringify([
+        { name: 'HsnAPI', apiKey: 'hsn-key', baseUrl: 'https://hsn.example/v1', model: 'model-a', type: 'openai' },
+        { name: 'XemAPI_vip', apiKey: 'xem-key', baseUrl: 'https://xem.example/v1', model: 'model-b', type: 'openai' },
+        { name: 'NewAPI_123nhh', apiKey: 'new-key', baseUrl: 'https://new.example/v1', model: 'model-c', type: 'openai' },
+      ]),
+    } as NodeJS.ProcessEnv);
+
+    expect(providers.map((provider) => provider.name)).toEqual([
+      'NewAPI_123nhh',
+      'HsnAPI',
+      'XemAPI_vip',
+    ]);
+  });
+
+  it('未配置优先级时默认优先使用 NewAPI_123nhh', () => {
+    const providers = parseAIProvidersFromEnv({
+      AI_PROVIDERS_CONFIG: JSON.stringify([
+        { name: 'HsnAPI', apiKey: 'hsn-key', baseUrl: 'https://hsn.example/v1', model: 'model-a', type: 'openai' },
+        { name: 'NewAPI_123nhh', apiKey: 'new-key', baseUrl: 'https://new.example/v1', model: 'model-b', type: 'openai' },
+      ]),
+    } as NodeJS.ProcessEnv);
+
+    expect(providers.map((provider) => provider.name)).toEqual([
+      'NewAPI_123nhh',
+      'HsnAPI',
+    ]);
+  });
 });

@@ -1,10 +1,11 @@
-import { and, asc, count, desc, eq, gte, isNotNull, like, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, isNotNull, isNull, like, lte, ne, or, sql } from 'drizzle-orm';
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
-import { battleReportGenerations } from '@/lib/db/schema';
+import { battleReportGenerationCombatants, battleReportGenerations, largeObjects } from '@/lib/db/schema';
 
 export type BattleReportGenerationStatus = 'completed' | 'aborted' | 'failed';
 export type BattleReportGenerationMode = 'stream' | 'non-stream';
 export type BattleReportGenerationListSort = 'started_at_desc' | 'started_at_asc';
+export type BattleReportPublicListSort = 'published_at_desc' | 'published_at_asc';
 
 export type BattleReportGenerationsListFilter = {
   status?: BattleReportGenerationStatus;
@@ -13,6 +14,20 @@ export type BattleReportGenerationsListFilter = {
   pvpOnly?: boolean;
   titleQuery?: string;
   sort?: BattleReportGenerationListSort;
+};
+
+export type BattleReportPublicListFilter = {
+  titleQuery?: string;
+  sort?: BattleReportPublicListSort;
+};
+
+export type PublicBattleReportKDRow = {
+  generationId: string;
+  startedAt: string;
+  publicSince: string | null;
+  username: string | null;
+  winner: string | null;
+  combatantName: string;
 };
 
 export type BattleReportGenerationInsert = {
@@ -61,6 +76,7 @@ export type BattleReportGenerationInsert = {
   aiModel?: string | null;
   headline?: string | null;
   winner?: string | null;
+  note?: string | null;
   outputChars?: number | null;
   outputBytes?: number | null;
   promptTokens?: number | null;
@@ -86,6 +102,7 @@ export type BattleReportGenerationRowLite = {
   generation_mode: BattleReportGenerationMode;
   endpoint: string;
   user_id: number | null;
+  username: string | null;
   mode: string;
   scenario_title: string | null;
   ai_model: string | null;
@@ -96,6 +113,7 @@ export type BattleReportGenerationRowLite = {
   story_length: string | null;
   headline: string | null;
   winner: string | null;
+  note: string | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
   total_tokens: number | null;
@@ -104,6 +122,8 @@ export type BattleReportGenerationRowLite = {
   output_preview: string | null;
   output_has_sensitive_words: number | null;
   output_has_shield_words: number | null;
+  is_public: number;
+  public_since: string | null;
   extra_json: string | null;
   pvp_room_id: string | null;
   pvp_match_id: string | null;
@@ -186,6 +206,7 @@ const mapLiteRow = (row: {
   generationMode: string;
   endpoint: string;
   userId: number | null;
+  username: string | null;
   mode: string | null;
   scenarioTitle: string | null;
   aiModel: string | null;
@@ -196,6 +217,7 @@ const mapLiteRow = (row: {
   storyLength: string | null;
   headline: string | null;
   winner: string | null;
+  note: string | null;
   promptTokens: number | null;
   completionTokens: number | null;
   totalTokens: number | null;
@@ -204,6 +226,8 @@ const mapLiteRow = (row: {
   outputPreview: string | null;
   outputHasSensitiveWords: number | null;
   outputHasShieldWords: number | null;
+  isPublic: number | null;
+  publicSince: string | null;
   extraJson: string | null;
   pvpRoomId: string | null;
   pvpMatchId: string | null;
@@ -219,6 +243,7 @@ const mapLiteRow = (row: {
   generation_mode: (row.generationMode === 'non-stream' ? 'non-stream' : 'stream') as BattleReportGenerationMode,
   endpoint: row.endpoint,
   user_id: toIntOrNull(row.userId),
+  username: row.username,
   mode: row.mode ?? '',
   scenario_title: row.scenarioTitle,
   ai_model: row.aiModel,
@@ -229,6 +254,7 @@ const mapLiteRow = (row: {
   story_length: row.storyLength,
   headline: row.headline,
   winner: row.winner,
+  note: row.note,
   prompt_tokens: toIntOrNull(row.promptTokens),
   completion_tokens: toIntOrNull(row.completionTokens),
   total_tokens: toIntOrNull(row.totalTokens),
@@ -237,6 +263,8 @@ const mapLiteRow = (row: {
   output_preview: row.outputPreview,
   output_has_sensitive_words: toIntOrNull(row.outputHasSensitiveWords),
   output_has_shield_words: toIntOrNull(row.outputHasShieldWords),
+  is_public: toInt(row.isPublic, 0),
+  public_since: row.publicSince,
   extra_json: row.extraJson,
   pvp_room_id: row.pvpRoomId,
   pvp_match_id: row.pvpMatchId,
@@ -300,6 +328,7 @@ export const insertBattleReportGenerationRecord = async (
       aiModel: payload.aiModel ?? null,
       headline: payload.headline ?? null,
       winner: payload.winner ?? null,
+      note: payload.note ?? null,
       outputChars: payload.outputChars ?? null,
       outputBytes: payload.outputBytes ?? null,
       promptTokens: payload.promptTokens ?? null,
@@ -358,6 +387,7 @@ export const getBattleReportGenerationByIdLite = async (
       generationMode: battleReportGenerations.generationMode,
       endpoint: battleReportGenerations.endpoint,
       userId: battleReportGenerations.userId,
+      username: battleReportGenerations.username,
       mode: battleReportGenerations.mode,
       scenarioTitle: battleReportGenerations.scenarioTitle,
       aiModel: battleReportGenerations.aiModel,
@@ -368,6 +398,7 @@ export const getBattleReportGenerationByIdLite = async (
       storyLength: battleReportGenerations.storyLength,
       headline: battleReportGenerations.headline,
       winner: battleReportGenerations.winner,
+      note: battleReportGenerations.note,
       promptTokens: battleReportGenerations.promptTokens,
       completionTokens: battleReportGenerations.completionTokens,
       totalTokens: battleReportGenerations.totalTokens,
@@ -376,6 +407,8 @@ export const getBattleReportGenerationByIdLite = async (
       outputPreview: battleReportGenerations.outputPreview,
       outputHasSensitiveWords: battleReportGenerations.outputHasSensitiveWords,
       outputHasShieldWords: battleReportGenerations.outputHasShieldWords,
+      isPublic: battleReportGenerations.isPublic,
+      publicSince: battleReportGenerations.publicSince,
       extraJson: battleReportGenerations.extraJson,
       pvpRoomId: battleReportGenerations.pvpRoomId,
       pvpMatchId: battleReportGenerations.pvpMatchId,
@@ -414,6 +447,7 @@ export const listBattleReportGenerationsByUserIdLite = async (
       generationMode: battleReportGenerations.generationMode,
       endpoint: battleReportGenerations.endpoint,
       userId: battleReportGenerations.userId,
+      username: battleReportGenerations.username,
       mode: battleReportGenerations.mode,
       scenarioTitle: battleReportGenerations.scenarioTitle,
       aiModel: battleReportGenerations.aiModel,
@@ -424,6 +458,7 @@ export const listBattleReportGenerationsByUserIdLite = async (
       storyLength: battleReportGenerations.storyLength,
       headline: battleReportGenerations.headline,
       winner: battleReportGenerations.winner,
+      note: battleReportGenerations.note,
       promptTokens: battleReportGenerations.promptTokens,
       completionTokens: battleReportGenerations.completionTokens,
       totalTokens: battleReportGenerations.totalTokens,
@@ -432,6 +467,8 @@ export const listBattleReportGenerationsByUserIdLite = async (
       outputPreview: battleReportGenerations.outputPreview,
       outputHasSensitiveWords: battleReportGenerations.outputHasSensitiveWords,
       outputHasShieldWords: battleReportGenerations.outputHasShieldWords,
+      isPublic: battleReportGenerations.isPublic,
+      publicSince: battleReportGenerations.publicSince,
       extraJson: battleReportGenerations.extraJson,
       pvpRoomId: battleReportGenerations.pvpRoomId,
       pvpMatchId: battleReportGenerations.pvpMatchId,
@@ -541,4 +578,171 @@ export const updateBattleReportGenerationOutputHasSensitiveWords = async (
     .returning({ id: battleReportGenerations.id });
 
   return updated.length > 0;
+};
+
+export const updateBattleReportGenerationPublication = async (
+  db: AppDrizzleDb,
+  generationId: string,
+  isPublic: boolean,
+  nowIso: string,
+  mode?: string | null,
+): Promise<boolean> => {
+  const updated = await db
+    .update(battleReportGenerations)
+    .set({
+      isPublic: isPublic ? 1 : 0,
+      publicSince: isPublic ? sql`COALESCE(${battleReportGenerations.publicSince}, ${nowIso})` : null,
+      updatedAt: nowIso,
+      ...(mode ? { mode } : {}),
+    })
+    .where(eq(battleReportGenerations.id, generationId))
+    .returning({ id: battleReportGenerations.id });
+
+  return updated.length > 0;
+};
+
+export const updateBattleReportGenerationNote = async (
+  db: AppDrizzleDb,
+  generationId: string,
+  note: string | null,
+): Promise<boolean> => {
+  const rows = await db
+    .update(battleReportGenerations)
+    .set({ note, updatedAt: new Date().toISOString() })
+    .where(eq(battleReportGenerations.id, generationId))
+    .returning({ id: battleReportGenerations.id });
+  return rows.length > 0;
+};
+
+export const deleteBattleReportGenerationRecord = async (db: AppDrizzleDb, generationId: string): Promise<boolean> => {
+  const safeId = generationId.trim();
+  if (!safeId) return false;
+  await db.delete(battleReportGenerationCombatants).where(eq(battleReportGenerationCombatants.generationId, safeId));
+  await db.delete(largeObjects).where(and(
+    eq(largeObjects.kind, 'battle_report_generation_output'),
+    eq(largeObjects.ownerRefId, safeId),
+  ));
+  const rows = await db.delete(battleReportGenerations)
+    .where(eq(battleReportGenerations.id, safeId))
+    .returning({ id: battleReportGenerations.id });
+  return rows.length > 0;
+};
+
+export const listPublicBattleReportGenerationsLite = async (
+  db: AppDrizzleDb,
+  limit: number,
+  offset: number,
+  filter?: BattleReportPublicListFilter,
+): Promise<BattleReportGenerationRowLite[]> => {
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const conditions = [
+    eq(battleReportGenerations.isPublic, 1),
+    eq(battleReportGenerations.status, 'completed'),
+  ];
+  const titleQuery = typeof filter?.titleQuery === 'string' ? filter.titleQuery.trim().slice(0, 120) : '';
+  if (titleQuery) {
+    const pattern = `%${titleQuery}%`;
+    conditions.push(or(like(battleReportGenerations.headline, pattern), like(battleReportGenerations.scenarioTitle, pattern))!);
+  }
+
+  const rows = await db
+    .select({
+      id: battleReportGenerations.id,
+      startedAt: battleReportGenerations.startedAt,
+      endedAt: battleReportGenerations.endedAt,
+      durationMs: battleReportGenerations.durationMs,
+      status: battleReportGenerations.status,
+      generationMode: battleReportGenerations.generationMode,
+      endpoint: battleReportGenerations.endpoint,
+      userId: battleReportGenerations.userId,
+      username: battleReportGenerations.username,
+      mode: battleReportGenerations.mode,
+      scenarioTitle: battleReportGenerations.scenarioTitle,
+      aiModel: battleReportGenerations.aiModel,
+      scenarioDataCardId: battleReportGenerations.scenarioDataCardId,
+      scenarioDataCardUpdatedAt: battleReportGenerations.scenarioDataCardUpdatedAt,
+      language: battleReportGenerations.language,
+      selectedLevel: battleReportGenerations.selectedLevel,
+      storyLength: battleReportGenerations.storyLength,
+      headline: battleReportGenerations.headline,
+      winner: battleReportGenerations.winner,
+      note: battleReportGenerations.note,
+      promptTokens: battleReportGenerations.promptTokens,
+      completionTokens: battleReportGenerations.completionTokens,
+      totalTokens: battleReportGenerations.totalTokens,
+      cachedTokens: battleReportGenerations.cachedTokens,
+      reasoningTokens: battleReportGenerations.reasoningTokens,
+      outputPreview: battleReportGenerations.outputPreview,
+      outputHasSensitiveWords: battleReportGenerations.outputHasSensitiveWords,
+      outputHasShieldWords: battleReportGenerations.outputHasShieldWords,
+      isPublic: battleReportGenerations.isPublic,
+      publicSince: battleReportGenerations.publicSince,
+      extraJson: battleReportGenerations.extraJson,
+      pvpRoomId: battleReportGenerations.pvpRoomId,
+      pvpMatchId: battleReportGenerations.pvpMatchId,
+      pvpRoundId: battleReportGenerations.pvpRoundId,
+      createdAt: battleReportGenerations.createdAt,
+      updatedAt: battleReportGenerations.updatedAt,
+    })
+    .from(battleReportGenerations)
+    .where(and(...conditions))
+    .orderBy(filter?.sort === 'published_at_asc' ? asc(battleReportGenerations.publicSince) : desc(battleReportGenerations.publicSince))
+    .limit(safeLimit)
+    .offset(safeOffset);
+
+  return rows.map(mapLiteRow);
+};
+
+export const listPublicBattleReportKDRows = async (
+  db: AppDrizzleDb,
+  filter: { fromIso?: string; toIso?: string; username?: string } = {},
+): Promise<PublicBattleReportKDRow[]> => {
+  const arenaEndpoints = [
+    'api/arena/generate',
+    '/api/arena/generate',
+    'api/arena/generate-stream',
+    '/api/arena/generate-stream',
+    'api/arena/continuous-bundle',
+    '/api/arena/continuous-bundle',
+    'api/generate-battle-story',
+    '/api/generate-battle-story',
+  ];
+  const conditions = [
+    eq(battleReportGenerations.isPublic, 1),
+    eq(battleReportGenerations.status, 'completed'),
+    isNull(battleReportGenerations.pvpMatchId),
+    or(isNull(battleReportGenerations.mode), ne(battleReportGenerations.mode, 'daily'))!,
+    or(...arenaEndpoints.map((endpoint) => eq(battleReportGenerations.endpoint, endpoint)))!,
+  ];
+
+  if (filter.fromIso) conditions.push(gte(battleReportGenerations.startedAt, filter.fromIso));
+  if (filter.toIso) conditions.push(lte(battleReportGenerations.startedAt, filter.toIso));
+  if (filter.username) conditions.push(eq(battleReportGenerations.username, filter.username));
+
+  const rows = await db
+    .select({
+      generationId: battleReportGenerations.id,
+      startedAt: battleReportGenerations.startedAt,
+      publicSince: battleReportGenerations.publicSince,
+      username: battleReportGenerations.username,
+      winner: battleReportGenerations.winner,
+      combatantName: battleReportGenerationCombatants.name,
+    })
+    .from(battleReportGenerations)
+    .innerJoin(
+      battleReportGenerationCombatants,
+      eq(battleReportGenerationCombatants.generationId, battleReportGenerations.id),
+    )
+    .where(and(...conditions))
+    .orderBy(asc(battleReportGenerations.startedAt), asc(battleReportGenerationCombatants.sortIndex));
+
+  return rows.map((row) => ({
+    generationId: row.generationId,
+    startedAt: row.startedAt,
+    publicSince: row.publicSince,
+    username: row.username,
+    winner: row.winner,
+    combatantName: row.combatantName,
+  }));
 };

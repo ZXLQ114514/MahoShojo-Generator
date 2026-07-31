@@ -37,6 +37,8 @@ type TokenBucketState = {
 
 const bucketStates = new Map<string, TokenBucketState>();
 
+const AUTH_ATTEMPT_RATE_LIMITS_ENABLED = false;
+
 const SWEEP_INTERVAL = 256;
 const SWEEP_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 
@@ -131,6 +133,13 @@ const consumeTokenBucket = (
 export const acquireAuthAttemptRateLimit = (
   input: AcquireAuthAttemptRateLimitInput,
 ): AcquireAuthAttemptRateLimitResult => {
+  if (!AUTH_ATTEMPT_RATE_LIMITS_ENABLED) {
+    return {
+      allowed: true,
+      retryAfterSeconds: 0,
+    };
+  }
+
   const nowMs = typeof input.nowMs === 'number' ? input.nowMs : Date.now();
   maybeSweepExpiredStates(nowMs);
 

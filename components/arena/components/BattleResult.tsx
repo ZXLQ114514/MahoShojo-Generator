@@ -19,6 +19,7 @@ import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { JsonSizeIndicator } from '@/components/shared/JsonSizeIndicator';
 import { BattleIllustrationPanel } from './BattleIllustrationPanel';
 import { resolveBattleReportCardManualWidthPx } from '../utils/battleReportCardWidth';
+import { BattleReportPublicationControl } from './BattleReportPublicationControl';
 
 interface BattleResultProps {
   onSaveImage: (imageUrl: string) => void;
@@ -227,6 +228,8 @@ export function BattleResult({ onSaveImage }: BattleResultProps) {
           />
         )
       )}
+
+      {!isGenerating && hasBattleReport ? <BattleReportPublicationControl generationId={lastGenerationId} mode={battleMode} /> : null}
 
       {shouldShowIllustrationPanel && (
         <BattleIllustrationPanel

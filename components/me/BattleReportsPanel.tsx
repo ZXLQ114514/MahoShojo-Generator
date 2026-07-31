@@ -16,6 +16,9 @@ type BattleReportRecordSummary = {
   mode: string;
   headline: string | null;
   winner: string | null;
+  username: string | null;
+  note: string | null;
+  isPublic: boolean;
   hasPreview: boolean;
   canRegenerate: boolean;
   contentBlocked: boolean;
@@ -226,6 +229,18 @@ export function BattleReportsPanel({ isAuthenticated, onOpenDetails, onRegenerat
   const canNext = page < totalPages;
 
   const records = reportsQuery.data?.records ?? [];
+
+  const handleDelete = async (generationId: string) => {
+    if (!window.confirm('确定删除这条自己上传的战报吗？公开状态和正文也会一并删除，且无法恢复。')) return;
+    try {
+      const response = await authStorage.fetch(`/api/me/battle-reports/${encodeURIComponent(generationId)}`, { method: 'DELETE' });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || '删除战报失败');
+      await reportsQuery.refetch();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '删除战报失败');
+    }
+  };
 
   const isFiltered = Boolean(status || mode || generationMode || pvpOnly || (sort && sort !== 'started_at_desc') || search);
 
@@ -452,6 +467,9 @@ export function BattleReportsPanel({ isAuthenticated, onOpenDetails, onRegenerat
                           <span>{formatTime(r.startedAt)}</span>
                           <span className="text-gray-400">·</span>
                           <span>胜者：{r.winner || '（未知）'}</span>
+                          <span className="text-gray-400">·</span>
+                          <span>上传人：{r.username || '未知用户'}</span>
+                          {r.note ? <><span className="text-gray-400">·</span><span className="max-w-[26rem] truncate" title={r.note}>备注：{r.note}</span></> : null}
                           {r.pvpMatchId ? (
                             <>
                               <span className="text-gray-400">·</span>
@@ -477,6 +495,13 @@ export function BattleReportsPanel({ isAuthenticated, onOpenDetails, onRegenerat
                           title={r.canRegenerate ? '尽力复现并生成可下载的战报卡片' : (r.errorMessage || '当前没有可重生正文')}
                         >
                           {isRegenerating ? '生成中…' : '重生战报'}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
+                          onClick={() => void handleDelete(r.id)}
+                        >
+                          删除
                         </button>
                       </div>
                     </div>

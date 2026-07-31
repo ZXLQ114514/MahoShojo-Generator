@@ -116,6 +116,113 @@ const SENSENOVA_TOKEN_PLAN_MODELS: AIModelOption[] = [
     }
 ];
 
+// NewAPI 123nhh 的模型列表来自其 /v1/models 返回值；排除了嵌入、重排、语音、OCR 和安全审核模型。
+const NEWAPI_123NHH_MODEL_IDS = [
+    'cerebras/gemma-4-31b',
+    'cerebras/gpt-oss-120b',
+    'cerebras/zai-glm-4.7',
+    'claude-fable-5',
+    'claude-haiku-4-5-20251001',
+    'claude-opus-4-1-20250805',
+    'claude-opus-4-20250514',
+    'claude-opus-4-5-20251101',
+    'claude-opus-4-6',
+    'claude-opus-4-7',
+    'claude-opus-4-8',
+    'claude-opus-5',
+    'claude-sonnet-4-20250514',
+    'claude-sonnet-4-5-20250929',
+    'claude-sonnet-4-6',
+    'claude-sonnet-5',
+    'codex-auto-review',
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-3-flash-preview',
+    'gemini-3-pro-preview',
+    'gemini-3.1-flash-lite-preview',
+    'gemini-3.1-pro',
+    'gemini-3.1-pro-enhanced',
+    'gemini-3.1-pro-preview',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash-thinking',
+    'gemini-3.5-flash-thinking-lite',
+    'gemini-3.6-flash',
+    'gemini-auto',
+    'gemini-flash-lite',
+    'gemma-3-12b-it',
+    'gemma-3-4b-it',
+    'gemma-3n-e2b-it',
+    'gemma-3n-e4b-it',
+    'gemma-4-26b-a4b-it',
+    'gemma-4-31b-it',
+    'glm-4.5-flash',
+    'glm-4.6v-flash',
+    'glm-5-t',
+    'glm-5.1-t',
+    'glm-5.2',
+    'gpt-5.4',
+    'gpt-5.4-mini',
+    'gpt-5.5',
+    'gpt-5.6-luna',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
+    'gpt-oss-120b',
+    'gpt-oss-20b',
+    'grok-4.20-0309',
+    'grok-4.20-0309-non-reasoning',
+    'grok-4.20-0309-reasoning',
+    'grok-4.20-multi-agent-0309',
+    'grok-4.3',
+    'grok-4.5',
+    'grok-build-0.1',
+    'grok-chat-fast',
+    'grok-composer-2.5-fast',
+    'kat-coder-air-V1-128k',
+    'kat-coder-exp-128k',
+    'kimi-k2.6',
+    'laguna-m.1',
+    'laguna-s-2.1',
+    'laguna-xs-2.1',
+    'ling-3.0-flash',
+    'llama-3.1-70b-instruct',
+    'llama-3.2-11b-vision-instruct',
+    'llama-3.2-90b-vision-instruct',
+    'llama-3.3-70b-instruct',
+    'llama-3.3-nemotron-super-49b-v1.5',
+    'llama-4-maverick',
+    'minimax-m2.7',
+    'minimax-m3',
+    'minimax-m3-t',
+    'mistral-large-2512',
+    'mistral-small-2603',
+    'nemotron-3-nano-30b-a3b',
+    'nemotron-3-nano-omni-30b-a3b-reasoning',
+    'nemotron-3-super-120b-a12b',
+    'nemotron-3-ultra-550b-a55b',
+    'nemotron-4-340b-instruct',
+    'nemotron-nano-12b-v2-vl',
+    'nemotron-nano-9b-v2',
+    'north-mini-code',
+    'openrouter/free',
+    'pearl-gemma-4-31b',
+    'qwen3-next-80b-a3b-instruct',
+    'qwen3.5-122b-a10b',
+    'qwen3.5-2b',
+    'qwen3.5-397b-a17b',
+    'qwen3.5-397b-a17b-t',
+    'qwen3.7-max-t',
+    'sensenova-u1-fast',
+    'step-3.5-flash',
+    'step-3.7-flash',
+].map((value): AIModelOption => ({
+    value,
+    label: value,
+    description: `NewAPI 123nhh 当前可用的文本生成模型：${value}`,
+}));
+
 /**
  * 可选 AI 供应商目录。
  * - description 用于向用户解释供应商特色。
@@ -135,62 +242,93 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'default',
                 label: '默认策略',
-                description: '常规场景保持原有调用顺序，默认倾向使用 Gemini 2.5 Flash；排位优先使用轻量模型。'
+                description: '依照服务器当前默认供应商顺序自动选择可用模型。'
             },
             {
-                value: 'big-pickle',
-                label: '实验性/推广模型',
-                description: '可能会随时更换的、处于实验或推广期的模型，或许能带来一些新奇的体验，但不建议发送敏感或私密数据。'
+                value: 'codex-auto-review',
+                label: 'Codex Auto Review',
+                description: 'HsnAPI 默认通道中的自动审查模型。'
             },
             {
                 value: 'deepseek-v4-flash',
                 label: 'DeepSeek V4 Flash',
-                description: 'DeepSeek V4 的高速轻量版本，适合高频生成、草稿与长文本补全。'
+                description: 'HsnAPI 默认通道中的 DeepSeek V4 高速轻量模型。'
+            },
+            {
+                value: 'glm-5.2',
+                label: 'GLM 5.2',
+                description: 'HsnAPI 与 123nhh 默认通道中的 GLM 5.2 模型。'
+            },
+            {
+                value: 'gpt-5.2',
+                label: 'GPT-5.2',
+                description: 'HsnAPI 默认通道中的 GPT-5.2 模型。'
+            },
+            {
+                value: 'sensenova-6.7-flash-lite',
+                label: 'SenseNova 6.7 Flash-Lite',
+                description: 'HsnAPI 默认通道中的商汤高速轻量模型。'
             },
             {
                 value: 'deepseek-v4-pro',
                 label: 'DeepSeek V4 Pro',
-                description: 'DeepSeek V4 完全体，适合复杂分析、长文本写作与高质量生成。'
+                description: 'DeepSeek 与 123nhh 默认通道中的 DeepSeek V4 高性能模型。'
+            },
+            {
+                value: 'gpt-5.4',
+                label: 'GPT-5.4',
+                description: 'XemAPI_vip 与 123nhh 默认通道中的 GPT-5.4 模型。'
+            },
+            {
+                value: 'gpt-5.5',
+                label: 'GPT-5.5',
+                description: 'XemAPI_vip 默认通道中的 GPT-5.5 模型。'
+            },
+            {
+                value: 'qwen3.7-max-t',
+                label: 'Qwen 3.7 Max T',
+                description: '123nhh 默认通道中的 Qwen 3.7 Max T 文本生成模型。'
+            },
+            {
+                value: 'deepseek-ai/deepseek-v4-pro',
+                label: 'DeepSeek V4 Pro (XemAPI)',
+                description: 'XemAPI_vip 默认通道中的 DeepSeek V4 Pro 模型。'
+            }
+        ]
+    },
+    {
+        id: 'hsnapi',
+        name: 'HsnAPI',
+        description: 'OpenAI 兼容供应商，按当前服务器默认配置同步。自定义模式下需要填写自己的 API Key。',
+        docsUrl: '',
+        baseUrl: 'https://s2a.hsn8086.com/v1',
+        type: 'openai',
+        mode: 'auto',
+        models: [
+            {
+                value: 'codex-auto-review',
+                label: 'Codex Auto Review',
+                description: 'HsnAPI 当前可用的自动审查模型。'
+            },
+            {
+                value: 'deepseek-v4-flash',
+                label: 'DeepSeek V4 Flash',
+                description: 'HsnAPI 当前可用的 DeepSeek V4 高速轻量模型。'
             },
             {
                 value: 'glm-5.2',
-                label: 'GLM-5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，Coding 能力开源 SOTA，适合复杂长程任务。'
+                label: 'GLM 5.2',
+                description: 'HsnAPI 当前可用的 GLM 5.2 模型。'
             },
             {
-                value: 'glm-5.1',
-                label: 'GLM-5.1',
-                description: '智谱旗下新一代通用模型，综合能力更强，适合复杂指令、多轮对话与高质量创作。'
+                value: 'gpt-5.2',
+                label: 'GPT-5.2',
+                description: 'HsnAPI 当前可用的 GPT-5.2 模型。'
             },
             {
-                value: 'glm-4.7',
-                label: 'GLM-4.7',
-                description: '智谱旗下通用模型的更新版本，适合复杂指令、多轮对话与综合写作场景。'
-            },
-            {
-                value: 'gemini-3.6-flash',
-                label: 'Gemini 3.6 Flash',
-                description: 'Google 的新模型，据用户评测说很喜欢一惊一乍，还挺中二的。'
-            },
-            {
-                value: 'gemini-3.5-flash-lite',
-                label: 'Gemini 3.5 Flash Lite',
-                description: 'Google 最新一代高速轻量模型，适合预算敏感与高并发生成场景。'
-            },
-            {
-                value: 'gemma-4-31b-it',
-                label: 'Gemma 4 31B IT',
-                description: '较新的 Gemma 4 指令模型（31B），适合作为高优先级的 Gemma 备用选择。'
-            },
-            {
-                value: 'gemma-4-26b-a4b-it',
-                label: 'Gemma 4 26B A4B IT',
-                description: '较新的 Gemma 4 指令模型（26B A4B），建议先作为可选备用通道使用。'
-            },
-            {
-                value: 'gemma-3-27b-it',
-                label: 'Gemma 3 27B IT',
-                description: '更便宜但也更弱的 Gemma 3 指令模型（27B），建议仅作为流式输出的备用选择。'
+                value: 'sensenova-6.7-flash-lite',
+                label: 'SenseNova 6.7 Flash-Lite',
+                description: 'HsnAPI 当前可用的商汤高速轻量模型。'
             }
         ]
     },
@@ -1112,11 +1250,8 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
         type: 'deepseek',
         mode: 'auto',
         models: [
-            { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', description: 'DeepSeek V4 的高速轻量版本，但是体验也很强大，据称文本生成体验堪比 gemini-3.1-pro。' },
-            { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'DeepSeek V4 的完全体，适合复杂分析、长文本写作与更高要求的生成任务。' },
-            { value: 'deepseek-chat', label: 'DeepSeek-V3.2', description: '通用对话与分析模型，适合日常问答、写作与总结。' },
-            { value: 'deepseek-reasoner', label: 'DeepSeek-V3.2 思考模式', description: '思考模式会拉长推理链路，适合复杂问题与多步分析。' },
-            { value: 'deepseek-r1', label: 'DeepSeek R1', description: 'DeepSeek 思考版本，适合需要多步推理的复杂任务。' },
+            { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', description: 'DeepSeek 当前默认通道中的 V4 高速轻量模型，适合高频生成与长文本补全。' },
+            { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'DeepSeek 当前默认通道中的 DeepSeek V4 高性能模型。' },
         ]
     },
     {
@@ -1462,6 +1597,42 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
                 value: 'nvidia/nemotron-3-super-120b-a12b',
                 label: 'Nemotron 3 Super',
                 description: 'NVIDIA 最新混合 MoE 模型，适合复杂多智能体应用。'
+            },
+        ]
+    },
+    {
+        id: 'newapi-123nhh',
+        name: 'NewAPI 123nhh',
+        description: '独立的 NewAPI OpenAI 兼容供应商，支持多种文本生成模型。自定义模式下需要填写自己的 API Key。',
+        docsUrl: '',
+        baseUrl: 'https://api.123nhh.com/v1',
+        type: 'openai',
+        mode: 'auto',
+        models: NEWAPI_123NHH_MODEL_IDS
+    },
+    {
+        id: 'xemapi-vip',
+        name: 'XemAPI VIP',
+        description: 'OpenAI 兼容供应商，按本地环境配置同步，用于 GPT 5.x 系列模型调用。',
+        docsUrl: '',
+        baseUrl: 'https://ai.xem8k5.top/v1',
+        type: 'openai',
+        mode: 'auto',
+        models: [
+            {
+                value: 'gpt-5.4',
+                label: 'GPT-5.4',
+                description: 'XemAPI VIP 通道中的 GPT-5.4 模型，适合高质量内容生成与复杂任务。'
+            },
+            {
+                value: 'gpt-5.5',
+                label: 'GPT-5.5',
+                description: 'XemAPI VIP 通道中的 GPT-5.5 模型，适合更高质量内容生成与复杂任务。'
+            },
+            {
+                value: 'deepseek-ai/deepseek-v4-pro',
+                label: 'DeepSeek V4 Pro',
+                description: 'XemAPI VIP 通道中的 DeepSeek V4 Pro 模型，适合复杂推理与高质量内容生成。'
             },
         ]
     },

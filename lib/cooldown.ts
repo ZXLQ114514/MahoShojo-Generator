@@ -27,6 +27,40 @@ type UseProviderModeCooldownOptions = {
   currentMode: ProviderCooldownMode;
   systemDurationMs: number;
   customDurationMs: number;
+  runtimeSettingKey?: 'system' | 'battle';
+};
+
+type PublicCooldownSettings = {
+  systemSeconds: number;
+  customSeconds: number;
+  battleSeconds: number;
+};
+
+let publicCooldownSettingsPromise: Promise<PublicCooldownSettings | null> | null = null;
+
+const loadPublicCooldownSettings = async (): Promise<PublicCooldownSettings | null> => {
+  if (publicCooldownSettingsPromise) return publicCooldownSettingsPromise;
+  publicCooldownSettingsPromise = fetch('/api/public-settings', { cache: 'no-store' })
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const payload = (await response.json()) as { publicAiCooldown?: Partial<PublicCooldownSettings> };
+      const settings = payload.publicAiCooldown;
+      if (!settings) return null;
+      const readSeconds = (value: unknown, fallback: number): number => {
+        const parsed = typeof value === 'number' ? value : Number(value);
+        return Number.isFinite(parsed) && parsed >= 0 ? Math.min(86400, Math.trunc(parsed)) : fallback;
+      };
+      return {
+        systemSeconds: readSeconds(settings.systemSeconds, 60),
+        customSeconds: readSeconds(settings.customSeconds, 3),
+        battleSeconds: readSeconds(settings.battleSeconds, 120),
+      };
+    })
+    .catch(() => null)
+    .finally(() => {
+      publicCooldownSettingsPromise = null;
+    });
+  return publicCooldownSettingsPromise;
 };
 
 export const getOtherProviderCooldownMode = (mode: ProviderCooldownMode): ProviderCooldownMode =>
@@ -236,14 +270,29 @@ export const useProviderModeCooldown = ({
   currentMode,
   systemDurationMs,
   customDurationMs,
+  runtimeSettingKey = 'system',
 }: UseProviderModeCooldownOptions) => {
+  const [runtimeDurations, setRuntimeDurations] = useState({ systemDurationMs, customDurationMs });
+
+  useEffect(() => {
+    let active = true;
+    void loadPublicCooldownSettings().then((settings) => {
+      if (!active || !settings) return;
+      setRuntimeDurations({
+        systemDurationMs: (runtimeSettingKey === 'battle' ? settings.battleSeconds : settings.systemSeconds) * 1000,
+        customDurationMs: settings.customSeconds * 1000,
+      });
+    });
+    return () => { active = false; };
+  }, [runtimeSettingKey]);
+
   const systemCooldown = useCooldown(
     buildProviderCooldownStorageKey(baseKey, 'system'),
-    systemDurationMs,
+    runtimeDurations.systemDurationMs,
   );
   const customCooldown = useCooldown(
     buildProviderCooldownStorageKey(baseKey, 'custom'),
-    customDurationMs,
+    runtimeDurations.customDurationMs,
   );
 
   const currentCooldown = currentMode === 'custom' ? customCooldown : systemCooldown;
@@ -251,6 +300,7 @@ export const useProviderModeCooldown = ({
 
   return {
     ...currentCooldown,
+    currentDurationMs: currentMode === 'custom' ? runtimeDurations.customDurationMs : runtimeDurations.systemDurationMs,
     otherMode: getOtherProviderCooldownMode(currentMode),
     otherIsCooldown: otherCooldown.isCooldown,
     otherRemainingTime: otherCooldown.remainingTime,

@@ -4,6 +4,7 @@ import { mapDeckDetailPayload, mapDeckListPayload } from '@/lib/deck-client-mapp
 
 const STORAGE_KEY = 'mahoshojo_auth';
 const ENCRYPTION_KEY = 'mahoshojo_2024_secret_encryption_key';
+const PLAIN_STORAGE_PREFIX = 'plain:';
 
 export interface AuthData {
   username: string;
@@ -14,12 +15,23 @@ export interface AuthData {
 
 // Web Crypto API 加密工具
 class CryptoHelper {
+  private get subtle(): SubtleCrypto | null {
+    return globalThis.crypto?.subtle ?? null;
+  }
+
+  hasWebCrypto(): boolean {
+    return this.subtle !== null;
+  }
+
   private async getKey(): Promise<CryptoKey> {
+    const subtle = this.subtle;
+    if (!subtle) throw new Error('当前访问环境不支持 Web Crypto API');
+
     const encoder = new TextEncoder();
     const keyData = encoder.encode(ENCRYPTION_KEY);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+    const hashBuffer = await subtle.digest('SHA-256', keyData);
     
-    return crypto.subtle.importKey(
+    return subtle.importKey(
       'raw',
       hashBuffer,
       { name: 'AES-GCM' },
@@ -29,13 +41,16 @@ class CryptoHelper {
   }
 
   async encrypt(data: string): Promise<string> {
+    const subtle = this.subtle;
+    if (!subtle) throw new Error('当前访问环境不支持 Web Crypto API');
+
     const encoder = new TextEncoder();
     const encodedData = encoder.encode(data);
     
     const key = await this.getKey();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
     
-    const encryptedBuffer = await crypto.subtle.encrypt(
+    const encryptedBuffer = await subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
       encodedData
@@ -50,6 +65,9 @@ class CryptoHelper {
 
   async decrypt(encryptedData: string): Promise<string | null> {
     try {
+      const subtle = this.subtle;
+      if (!subtle) return null;
+
       const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
       
       const iv = combined.slice(0, 12);
@@ -57,7 +75,7 @@ class CryptoHelper {
       
       const key = await this.getKey();
       
-      const decryptedBuffer = await crypto.subtle.decrypt(
+      const decryptedBuffer = await subtle.decrypt(
         { name: 'AES-GCM', iv },
         key,
         data
@@ -73,6 +91,21 @@ class CryptoHelper {
 }
 
 const cryptoHelper = new CryptoHelper();
+
+const encodePlainStorage = (data: string): string => {
+  const bytes = new TextEncoder().encode(data);
+  return `${PLAIN_STORAGE_PREFIX}${btoa(String.fromCharCode(...bytes))}`;
+};
+
+const decodePlainStorage = (value: string): string | null => {
+  if (!value.startsWith(PLAIN_STORAGE_PREFIX)) return null;
+  try {
+    const binary = atob(value.slice(PLAIN_STORAGE_PREFIX.length));
+    return new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+  } catch {
+    return null;
+  }
+};
 
 let cachedEncryptedValue: string | null = null;
 let cachedAuthValue: AuthData | null = null;
@@ -173,7 +206,10 @@ const bootstrapAuthFromSession = async (): Promise<AuthData | null> => {
 export const authStorage = {
   // 加密存储认证信息
   async setAuth(data: AuthData): Promise<void> {
-    const encrypted = await cryptoHelper.encrypt(JSON.stringify(data));
+    const serialized = JSON.stringify(data);
+    const encrypted = cryptoHelper.hasWebCrypto()
+      ? await cryptoHelper.encrypt(serialized)
+      : encodePlainStorage(serialized);
     localStorage.setItem(STORAGE_KEY, encrypted);
     cachedEncryptedValue = encrypted;
     cachedAuthValue = data;
@@ -198,7 +234,9 @@ export const authStorage = {
 
       cachedEncryptedValue = encrypted;
       cachedAuthPromise = (async () => {
-        const decryptedStr = await cryptoHelper.decrypt(encrypted);
+        const decryptedStr = encrypted.startsWith(PLAIN_STORAGE_PREFIX)
+          ? decodePlainStorage(encrypted)
+          : await cryptoHelper.decrypt(encrypted);
         if (!decryptedStr) {
           cachedAuthValue = null;
           return null;
@@ -304,6 +342,12 @@ const resolveApiErrorMessage = async (response: Response, fallback: string): Pro
   return fallback;
 };
 
+const readJsonResponseSafely = async <T,>(response: Response): Promise<T | null> => {
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  if (!contentType.includes('application/json')) return null;
+  return (await response.json().catch(() => null)) as T | null;
+};
+
 const fetchDataCardsDetailed = async (
   search?: string,
   sortBy?: 'likes' | 'usage' | 'favorites' | 'created_at',
@@ -361,12 +405,22 @@ export const authApi = {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        cache: 'no-store',
         body: JSON.stringify({ username, email, password, turnstileToken })
       });
 
-      const data = await response.json();
+      const data = await readJsonResponseSafely<{
+        success?: boolean;
+        authKey?: string;
+        authMode?: 'better-auth' | 'legacy';
+        message?: string;
+        error?: string;
+        user?: { id?: number; username?: string; prefix?: string | null };
+        activityToken?: string | null;
+      }>(response);
       
-      if (response.ok && data.success) {
+      if (response.ok && data?.success) {
         const nextAuthKey = typeof data.authKey === 'string' && data.authKey.trim().length > 0 ? data.authKey.trim() : null;
         if (nextAuthKey) {
           await authStorage.setAuth({
@@ -378,13 +432,30 @@ export const authApi = {
         } else {
           authStorage.clearAuth();
         }
-        return data;
+        return {
+          success: true,
+          authKey: data.authKey,
+          authMode: data.authMode,
+          message: data.message,
+          user:
+            typeof data.user?.id === 'number' && typeof data.user?.username === 'string'
+              ? {
+                  id: data.user.id,
+                  username: data.user.username,
+                  prefix: data.user.prefix,
+                }
+              : undefined,
+          activityToken: data.activityToken,
+        };
       }
-      
-      return { success: false, error: data.error || '注册失败' };
+
+      return {
+        success: false,
+        error: data?.error || await resolveApiErrorMessage(response, `注册失败（HTTP ${response.status}）`),
+      };
     } catch (error) {
       console.error('Register error:', error);
-      return { success: false, error: '网络错误' };
+      return { success: false, error: error instanceof Error ? `网络错误：${error.message}` : '网络错误' };
     }
   },
 
@@ -407,12 +478,22 @@ export const authApi = {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        cache: 'no-store',
         body: JSON.stringify({ identifier, credential, mode, turnstileToken })
       });
 
-      const data = await response.json();
+      const data = await readJsonResponseSafely<{
+        success?: boolean;
+        authMode?: 'better-auth' | 'legacy';
+        authKey?: string;
+        user?: { id?: number; username?: string; prefix?: string | null };
+        activityToken?: string | null;
+        requiresTurnstile?: boolean;
+        error?: string;
+      }>(response);
       
-      if (response.ok && data.success) {
+      if (response.ok && data?.success) {
         const fromServerAuthKey = typeof data.authKey === 'string' && data.authKey.trim().length > 0 ? data.authKey.trim() : null;
         const fallbackLegacyKey = mode === 'legacy' && credential.trim().length > 0 ? credential.trim() : null;
         const persistedAuthKey = fromServerAuthKey ?? fallbackLegacyKey;
@@ -432,17 +513,30 @@ export const authApi = {
         } else {
           authStorage.clearAuth();
         }
-        return data;
+        return {
+          success: true,
+          authMode: data.authMode,
+          authKey: data.authKey,
+          user:
+            typeof data.user?.id === 'number' && typeof data.user?.username === 'string'
+              ? {
+                  id: data.user.id,
+                  username: data.user.username,
+                  prefix: data.user.prefix,
+                }
+              : undefined,
+          activityToken: data.activityToken,
+        };
       }
       
       return {
         success: false,
-        error: data.error || '登录失败',
-        requiresTurnstile: data.requiresTurnstile === true,
+        error: data?.error || await resolveApiErrorMessage(response, `登录失败（HTTP ${response.status}）`),
+        requiresTurnstile: data?.requiresTurnstile === true,
       };
     } catch (error) {
       console.error('Login error:', error);
-      return { success: false, error: '网络错误' };
+      return { success: false, error: error instanceof Error ? `网络错误：${error.message}` : '网络错误' };
     }
   },
 

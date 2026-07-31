@@ -30,12 +30,13 @@ import { PvpSettlementCardModal } from '@/components/pvp/PvpSettlementCardModal'
 import { authStorage } from '@/lib/auth';
 import { useClientRouteAdapter } from '@/lib/client-route-adapter';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { useCooldown } from '@/lib/cooldown';
+import { useProviderModeCooldown } from '@/lib/cooldown';
 import { inferTemplate } from '@/lib/data-card-converter';
 import { mapDataCardRuntimeSourceInfo, mapPublicDataCardRowToBattleSelectionPayload } from '@/lib/data-card-read-mappers';
 	import { config as appConfig } from '@/lib/config';
 	import { useAuth } from '@/lib/useAuth';
-	import { buildCustomProviderRequestPayload, isUsingUserProvidedKey } from '@/lib/ai/custom-provider';
+	import { buildCustomProviderRequestPayload } from '@/lib/ai/custom-provider';
+	import { resolveArenaProviderCooldownConfig } from '@/components/arena/utils/providerCooldown';
 	import { buildReasoningSummary, normalizeReasoningSource } from '@/lib/ai/reasoning-normalizer';
 	import { describePvpRoomCardRange, isPvpCombatantTypeAllowedByRange, isPvpDataCardStatsAllowedByRange, normalizePvpRoomCardRange } from '@/lib/pvp/card-range';
 	import { formatPvpDisplayName } from '@/lib/pvp/displayName';
@@ -606,10 +607,11 @@ export function PvpRoomPage() {
     return map;
   }, [userSummaryQuery.data?.users]);
 
-  const isUserCustomKey = isUsingUserProvidedKey(userProviderConfig);
-  const battleCooldownMs = isUserCustomKey ? 3000 : 120000;
-  const battleCooldownStorageKey = isUserCustomKey ? 'pvp.generateBattleCooldown:custom' : 'pvp.generateBattleCooldown:system';
-  const { isCooldown, startCooldown, remainingTime } = useCooldown(battleCooldownStorageKey, battleCooldownMs);
+  const pvpCooldownConfig = resolveArenaProviderCooldownConfig(userProviderConfig);
+  const { isCooldown, startCooldown, remainingTime } = useProviderModeCooldown({
+    ...pvpCooldownConfig,
+    baseKey: 'pvp.generateBattleCooldown:v2',
+  });
 
   const playerDisplayBySeat = useMemo(() => {
     const map = new Map<number, string>();

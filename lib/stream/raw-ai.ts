@@ -263,6 +263,11 @@ export async function generateWithStreamAI(
             break;
     }
 
+    log.info('AI 原始流提供商尝试顺序', {
+        strategy,
+        order: providersToTry.map((provider) => provider.name),
+    });
+
     // 遍历所有提供商
     for (let providerIndex = 0; providerIndex < providersToTry.length; providerIndex++) {
         const provider = providersToTry[providerIndex];

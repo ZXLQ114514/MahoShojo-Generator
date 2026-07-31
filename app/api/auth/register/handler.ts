@@ -284,16 +284,15 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
       const username = toNonEmptyString(payload.username);
       const emailInput = toNonEmptyString(payload.email);
       const password = toNonEmptyString(payload.password);
-      const turnstileToken = toNonEmptyString(payload.turnstileToken);
 
-      if (!username || !emailInput || !password || !turnstileToken) {
+      if (!username || !emailInput || !password) {
         await deps.recordAuthAuditLog({
           req,
           eventType: 'register_failed',
           authSource: 'better-auth',
           resultCode: 'INVALID_PAYLOAD',
         });
-        return json({ error: '用户名、邮箱、密码和安全验证不能为空' }, 400);
+        return json({ error: '用户名、邮箱和密码不能为空' }, 400);
       }
 
       const normalizedEmail = normalizeEmail(emailInput);
@@ -379,17 +378,6 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
           },
         });
         return deps.buildAuthAttemptRateLimitResponse(rateLimit);
-      }
-
-      const isTurnstileValid = await deps.verifyTurnstileToken(turnstileToken);
-      if (!isTurnstileValid) {
-        await deps.recordAuthAuditLog({
-          req,
-          eventType: 'register_failed',
-          authSource: 'better-auth',
-          resultCode: 'TURNSTILE_FAILED',
-        });
-        return json({ error: '安全验证失败，请重新验证' }, 400);
       }
 
       try {

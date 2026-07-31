@@ -599,6 +599,7 @@ CREATE TABLE IF NOT EXISTS battle_report_generations (
 
   headline TEXT,                         -- 战报标题（若可解析）
   winner TEXT,                           -- 胜利者（若可解析）
+  note TEXT,                             -- 用户备注
 
   output_chars INTEGER,                  -- 输出正文字符数（近似）
   output_bytes INTEGER,                  -- 输出字节数（近似）
@@ -612,6 +613,9 @@ CREATE TABLE IF NOT EXISTS battle_report_generations (
   output_preview TEXT,                   -- 输出正文预览（前后截断）
   output_has_sensitive_words BOOLEAN,    -- 是否检测到敏感词（可能仅基于预览）
   output_has_shield_words BOOLEAN,       -- 是否检测到屏蔽词（可能仅基于预览）
+
+  is_public BOOLEAN NOT NULL DEFAULT 0,   -- 0 = 私有, 1 = 公开
+  public_since TEXT,                      -- 首次公开时间
 
   extra_json TEXT,                       -- 其余扩展数据（JSON，尽量小）
 
@@ -629,6 +633,7 @@ CREATE INDEX IF NOT EXISTS idx_battle_report_generations_user_id ON battle_repor
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_winner ON battle_report_generations(winner);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_mode ON battle_report_generations(mode);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_status ON battle_report_generations(status);
+CREATE INDEX IF NOT EXISTS idx_battle_report_generations_public ON battle_report_generations(is_public, status, public_since DESC);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_generation_mode ON battle_report_generations(generation_mode);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_endpoint ON battle_report_generations(endpoint);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_scenario_data_card_id ON battle_report_generations(scenario_data_card_id);

@@ -29,6 +29,9 @@ export function ArenaPageLinks({ variant, className }: ArenaPageLinksProps) {
       <Link href="/battle" className={className ?? 'battle-lite-link font-semibold'}>
         切换到简洁版
       </Link>
+      <Link href="/arena-reports" className={className ?? 'battle-lite-link font-semibold'}>
+        查看公开战报
+      </Link>
       {wantuArenaLink ? (
         <a
           href={wantuArenaLink.href}

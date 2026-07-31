@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import { ProviderCooldownNotice } from '@/components/ai/ProviderCooldownNotice';
 import { MarkdownBlock } from '@/components/MarkdownBlock';
@@ -449,6 +450,12 @@ export function BattleStorySessionPanel(props: {
             >
               导出 Markdown
             </button>
+            <Link
+              href="/arena-reports/upload"
+              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              打包上传
+            </Link>
             <button
               type="button"
               onClick={() => void handleDeleteSession(activeSession?.id)}

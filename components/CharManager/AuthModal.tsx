@@ -174,7 +174,7 @@ export default function AuthModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const requiresTurnstile = authMode === 'register' || loginRequiresTurnstile;
+    const requiresTurnstile = loginRequiresTurnstile;
     if (requiresTurnstile && !turnstileToken) return;
 
     if (authMode === 'register') {
@@ -233,7 +233,7 @@ export default function AuthModal({
     resetCaptcha();
   };
 
-  const shouldShowTurnstile = authMode === 'register' || loginRequiresTurnstile;
+  const shouldShowTurnstile = loginRequiresTurnstile;
   const canSubmit =
     (!shouldShowTurnstile || Boolean(turnstileToken)) &&
     !isSubmitting &&

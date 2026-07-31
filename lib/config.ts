@@ -33,13 +33,15 @@ const hasValidModel = (model: AIProvider['model']): boolean => {
   return model.some((item) => hasNonEmptyText(item));
 };
 
+const DEFAULT_AI_PROVIDER_PRIORITY = 'NewAPI_123nhh,HsnAPI,DeepSeek,XemAPI_default,XemAPI_vip';
+
 // 解析 AI 提供商配置的函数
 export const parseAIProvidersFromEnv = (env: NodeJS.ProcessEnv = process.env): AIProvider[] => {
   // JSON 配置方式
   if (env.AI_PROVIDERS_CONFIG) {
     try {
       const providers = JSON.parse(env.AI_PROVIDERS_CONFIG) as AIProvider[];
-      return providers
+      const parsedProviders = providers
         .filter((provider) => {
           const hasApiKey = hasNonEmptyText(provider.apiKey);
           const canBeAnonymous = provider.allowAnonymous === true && provider.type === 'openai';
@@ -50,6 +52,22 @@ export const parseAIProvidersFromEnv = (env: NodeJS.ProcessEnv = process.env): A
           retryCount: p.retryCount ?? 1,
           skipProbability: p.skipProbability ?? 0
         }));
+
+      const priorityOrder = (env.AI_PROVIDER_PRIORITY || DEFAULT_AI_PROVIDER_PRIORITY)
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean);
+      if (priorityOrder.length === 0) return parsedProviders;
+
+      const priorityIndex = new Map(priorityOrder.map((name, index) => [name, index]));
+      return parsedProviders
+        .map((provider, index) => ({ provider, index }))
+        .sort((a, b) => {
+          const aPriority = priorityIndex.get(a.provider.name) ?? priorityOrder.length;
+          const bPriority = priorityIndex.get(b.provider.name) ?? priorityOrder.length;
+          return aPriority - bPriority || a.index - b.index;
+        })
+        .map(({ provider }) => provider);
     } catch (error) {
       console.warn('解析 AI_PROVIDERS_CONFIG 失败，回退到简单配置:', error);
     }

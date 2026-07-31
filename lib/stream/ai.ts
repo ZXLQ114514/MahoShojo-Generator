@@ -204,17 +204,22 @@ export async function generateWithStreamAI<T, I = string>(
         order: providersToTry.map(p => `${p.name}(${typeof p.model === 'string' ? p.model : 'multi'})`)
       });
       break;
-    case LoadBalanceStrategy.SEQUENTIAL:
+        case LoadBalanceStrategy.SEQUENTIAL:
     default:
       // 顺序执行（原有逻辑）
       providersToTry = [...expandedProviders];
       log.debug('使用顺序策略', {
         order: providersToTry.map(p => `${p.name}(${typeof p.model === 'string' ? p.model : 'multi'})`)
       });
-      break;
-  }
+            break;
+    }
 
-  // 遍历所有提供商
+    log.info('AI 流式提供商尝试顺序', {
+        strategy,
+        order: providersToTry.map((provider) => provider.name),
+    });
+
+    // 遍历所有提供商
   for (let providerIndex = 0; providerIndex < providersToTry.length; providerIndex++) {
     const provider = providersToTry[providerIndex];
 

@@ -19,6 +19,7 @@ export const TOPBAR_COVERED_ROUTES = [
   '/battle',
   '/arena',
   '/arena-stream',
+  '/arena-reports',
   '/creator',
   '/name',
   '/details',
@@ -94,6 +95,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: '完整竞技场',
         href: '/arena',
         description: '完整竞技场控制台',
+        isTopbarCovered: true,
+      },
+      {
+        label: '公开战报展览',
+        href: '/arena-reports',
+        description: '浏览创作者公开的竞技场战斗记录',
         isTopbarCovered: true,
       },
       {

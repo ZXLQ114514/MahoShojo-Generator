@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { BaseModal } from '@/components/shared/BaseModal';
@@ -33,6 +34,9 @@ type DetailResponse = {
     storyLength: string | null;
     headline: string | null;
     winner: string | null;
+    username: string | null;
+    note: string | null;
+    isPublic: boolean;
     outputPreview: string | null;
     hasPreview: boolean;
     contentBlocked: boolean;
@@ -87,6 +91,35 @@ export function BattleReportDetailsModal({ isOpen, generationId, onClose, onRege
 
   const record = detailQuery.data?.record ?? null;
   const combatants = detailQuery.data?.combatants ?? [];
+  const [note, setNote] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteMessage, setNoteMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNote(record?.note ?? '');
+    setNoteMessage(null);
+  }, [record?.id, record?.note]);
+
+  const saveNote = async () => {
+    if (!generationId) return;
+    setNoteSaving(true);
+    setNoteMessage(null);
+    try {
+      const response = await authStorage.fetch(`/api/me/battle-reports/${encodeURIComponent(generationId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || '备注保存失败');
+      setNoteMessage('备注已保存');
+      await detailQuery.refetch();
+    } catch (error) {
+      setNoteMessage(error instanceof Error ? error.message : '备注保存失败');
+    } finally {
+      setNoteSaving(false);
+    }
+  };
 
   return (
     <BaseModal
@@ -152,6 +185,10 @@ export function BattleReportDetailsModal({ isOpen, generationId, onClose, onRege
                 {record.mode} / {record.status}（{record.generationMode}）
               </div>
             </div>
+            <div className="text-sm sm:col-span-2">
+              <div className="text-xs text-gray-500">上传人</div>
+              <div className="font-medium text-gray-900">{record.username || '未知用户'}</div>
+            </div>
             <div className="text-sm">
               <div className="text-xs text-gray-500">胜者</div>
               <div className="font-medium text-gray-900">{record.winner || '（未知）'}</div>
@@ -180,6 +217,13 @@ export function BattleReportDetailsModal({ isOpen, generationId, onClose, onRege
                 {record.outputSource === 'r2' ? 'R2 外部存储' : record.outputSource === 'd1' ? 'D1 预览' : '无正文'}
               </div>
             </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4">
+            <div className="font-semibold text-gray-900">战报备注</div>
+            <p className="mt-1 text-xs text-gray-500">备注会随公开战报展示，用于标记这场战报的来源、主题或补充说明。</p>
+            <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} rows={3} className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="添加备注（最多 500 字）" />
+            <div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-gray-500">{note.length}/500 {noteMessage ? `· ${noteMessage}` : ''}</span><button type="button" onClick={() => void saveNote()} disabled={noteSaving} className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60">{noteSaving ? '保存中…' : '保存备注'}</button></div>
           </div>
 
           <div className="rounded-xl border bg-white p-4">

@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+import type { Auth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { toNextJsHandler } from 'better-auth/next-js';
 import { getBetterAuthBootstrapStatus } from '@/lib/auth/better-auth';
@@ -6,7 +7,7 @@ import { ensureAuthUserLink } from '@/lib/auth/user-auth-linking';
 import { getDrizzleDbFromRuntime } from '@/lib/db/drizzle';
 import { baAccounts, baSessions, baUsers, baVerifications } from '@/lib/db/schema/auth';
 
-type BetterAuthInstance = ReturnType<typeof betterAuth>;
+type BetterAuthInstance = Auth<any>;
 type BetterAuthRouteHandlers = ReturnType<typeof toNextJsHandler>;
 
 const betterAuthSchema = {
@@ -179,7 +180,7 @@ export const getBetterAuthInstance = (): BetterAuthInstance | null => {
     ...withTrustedOrigins(),
     emailAndPassword: {
       enabled: true,
-      sendResetPassword: async ({ user, url }) => {
+      sendResetPassword: async ({ user, url }: { user?: { email?: unknown; name?: unknown }; url?: unknown }) => {
         await sendPasswordResetEmailByResend({
           user: {
             email: user?.email,

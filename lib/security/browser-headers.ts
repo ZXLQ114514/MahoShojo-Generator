@@ -6,6 +6,7 @@ type StaticHeader = {
 type BrowserSecurityHeaderOptions = {
   allowGoogleAnalytics?: boolean;
   allowTurnstile?: boolean;
+  enableHttpsOnlyHeaders?: boolean;
   isProduction: boolean;
 };
 
@@ -16,6 +17,38 @@ const LOCAL_HOSTNAMES = new Set([
   '[::1]',
   'localhost',
 ]);
+
+function parseIpv4Address(hostname: string): number[] | null {
+  const parts = hostname.split('.');
+  if (parts.length !== 4) return null;
+
+  const octets = parts.map((part) => {
+    if (!/^\d+$/.test(part)) return Number.NaN;
+    const value = Number(part);
+    return Number.isInteger(value) && value >= 0 && value <= 255 ? value : Number.NaN;
+  });
+
+  return octets.every((octet) => Number.isInteger(octet)) ? octets : null;
+}
+
+function isPrivateOrVirtualLanIpv4(hostname: string): boolean {
+  const octets = parseIpv4Address(hostname);
+  if (!octets) return false;
+
+  const [first, second] = octets;
+
+  return (
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    // 常见虚拟局域网/组网工具会使用这些非 RFC1918 网段。
+    first === 25 ||
+    first === 26
+  );
+}
 
 export function buildPermissionsPolicy(): string {
   return [
@@ -81,7 +114,7 @@ export function buildContentSecurityPolicy(options: BrowserSecurityHeaderOptions
     `worker-src 'self' blob:`,
   ];
 
-  if (options.isProduction) {
+  if (options.isProduction && options.enableHttpsOnlyHeaders !== false) {
     directives.push('upgrade-insecure-requests');
   }
 
@@ -90,7 +123,7 @@ export function buildContentSecurityPolicy(options: BrowserSecurityHeaderOptions
 
 export function buildStaticBrowserSecurityHeaders(options: BrowserSecurityHeaderOptions): StaticHeader[] {
   return [
-    ...(options.isProduction
+    ...(options.isProduction && options.enableHttpsOnlyHeaders !== false
       ? [
           {
             key: 'Strict-Transport-Security',
@@ -122,7 +155,12 @@ export function buildStaticBrowserSecurityHeaders(options: BrowserSecurityHeader
 }
 
 export function isLocalHostname(hostname: string): boolean {
-  return LOCAL_HOSTNAMES.has(hostname) || hostname.endsWith('.localhost');
+  const normalizedHostname = hostname.toLowerCase();
+  return (
+    LOCAL_HOSTNAMES.has(normalizedHostname) ||
+    normalizedHostname.endsWith('.localhost') ||
+    isPrivateOrVirtualLanIpv4(normalizedHostname)
+  );
 }
 
 export function getRequestProtocol(url: URL, headers: Headers): string {

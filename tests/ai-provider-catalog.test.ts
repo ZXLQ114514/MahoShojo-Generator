@@ -34,9 +34,51 @@ describe('ai-provider-catalog', () => {
 
     expect(errors).toEqual([]);
   });
+  it('系统默认配置模型列表与当前服务器默认供应商保持一致', () => {
+    const systemProvider = AI_PROVIDER_CATALOG.find(item => item.id === 'system');
+    const hsnProvider = AI_PROVIDER_CATALOG.find(item => item.id === 'hsnapi');
+    const deepSeekProvider = AI_PROVIDER_CATALOG.find(item => item.id === 'deepseek');
+    const newApiProvider = AI_PROVIDER_CATALOG.find(item => item.id === 'newapi-123nhh');
+    const xemApiProvider = AI_PROVIDER_CATALOG.find(item => item.id === 'xemapi-vip');
+
+    expect(systemProvider?.models.map(model => model.value)).toEqual([
+      'default',
+      'codex-auto-review',
+      'deepseek-v4-flash',
+      'glm-5.2',
+      'gpt-5.2',
+      'sensenova-6.7-flash-lite',
+      'deepseek-v4-pro',
+      'gpt-5.4',
+      'gpt-5.5',
+      'qwen3.7-max-t',
+      'deepseek-ai/deepseek-v4-pro',
+    ]);
+    expect(hsnProvider?.models.map(model => model.value)).toEqual([
+      'codex-auto-review',
+      'deepseek-v4-flash',
+      'glm-5.2',
+      'gpt-5.2',
+      'sensenova-6.7-flash-lite',
+    ]);
+    expect(deepSeekProvider?.models.map(model => model.value)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
+    expect(newApiProvider?.baseUrl).toBe('https://api.123nhh.com/v1');
+    expect(newApiProvider?.models.map(model => model.value)).toEqual(expect.arrayContaining([
+      'deepseek-v4-pro',
+      'deepseek-v4-flash',
+      'gpt-5.4',
+      'gpt-5.5',
+      'glm-5.2',
+    ]));
+    expect(xemApiProvider?.models.map(model => model.value)).toEqual([
+      'gpt-5.4',
+      'gpt-5.5',
+      'deepseek-ai/deepseek-v4-pro',
+    ]);
+  });
 
   it('已有 Gemma 模型目录包含新的 Gemma 4 模型', () => {
-    const providerIds = ['system', 'google-cloudflare'];
+    const providerIds = ['google-cloudflare'];
 
     for (const providerId of providerIds) {
       const provider = AI_PROVIDER_CATALOG.find(item => item.id === providerId);
@@ -114,7 +156,6 @@ describe('ai-provider-catalog', () => {
     expect(modelValues).toEqual(expect.arrayContaining([
       'deepseek-v4-flash',
       'sensenova-6.7-flash-lite',
-      'sensenova-u1-fast',
     ]));
   });
 });

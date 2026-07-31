@@ -16,6 +16,7 @@ describe('navigation config', () => {
       '/battle',
       '/arena',
       '/arena-stream',
+      '/arena-reports',
       '/creator',
       '/name',
       '/details',

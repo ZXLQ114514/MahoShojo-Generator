@@ -1,10 +1,7 @@
-import {
-  OFFICIAL_KEY_MAX_AI_COOLDOWN_MS,
-  OFFICIAL_KEY_QUESTIONNAIRE_CHARACTER_COOLDOWN_MS,
-  USER_PROVIDED_KEY_COOLDOWN_MS,
-} from '@/lib/ai/cooldowns';
 import { ACTIVITY_TOKEN_HEADER, verifyActivityToken } from '@/lib/auth/activity-token';
 import { anonymizeIp, getClientIpFromHeaders } from '@/lib/arena/battle-report-log-utils';
+import { getDrizzleDbFromRuntime } from '@/lib/db/drizzle';
+import { getPublicAiCooldownSettings } from '@/lib/db/repositories/admin';
 
 export type PublicAiRateLimitAction =
   | 'magical_girl_generate'
@@ -54,17 +51,18 @@ const clampRetryAfterSeconds = (valueMs: number): number => {
   return Math.max(1, Math.ceil(Math.max(1, valueMs) / 1000));
 };
 
-const getCooldownMs = (
+const getCooldownMs = async (
   actionType: PublicAiRateLimitAction,
   providerMode: PublicAiProviderMode,
-): number => {
-  if (providerMode === 'custom') return USER_PROVIDED_KEY_COOLDOWN_MS;
+): Promise<number> => {
+  const settings = await getPublicAiCooldownSettings(getDrizzleDbFromRuntime());
+  if (providerMode === 'custom') return settings.customSeconds * 1000;
 
   if (actionType === 'free_generate') {
-    return OFFICIAL_KEY_MAX_AI_COOLDOWN_MS;
+    return settings.freeSeconds * 1000;
   }
 
-  return OFFICIAL_KEY_QUESTIONNAIRE_CHARACTER_COOLDOWN_MS;
+  return settings.systemSeconds * 1000;
 };
 
 const maybeSweepExpiredStates = (nowMs: number): void => {
@@ -111,7 +109,7 @@ export const acquirePublicAiRateLimit = async (
   maybeSweepExpiredStates(nowMs);
 
   const identity = await resolveIdentity(input.req);
-  const cooldownMs = getCooldownMs(input.actionType, input.providerMode);
+  const cooldownMs = await getCooldownMs(input.actionType, input.providerMode);
   const key = `${input.providerMode}:${input.actionType}:${identity.key}`;
   const lastAcceptedAt = identityLastAcceptedAt.get(key) ?? 0;
 

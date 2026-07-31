@@ -4,6 +4,7 @@ import { touchUserLastActivity } from './user-activity';
 export type BattleReportGenerationStatus = 'completed' | 'aborted' | 'failed';
 export type BattleReportGenerationMode = 'stream' | 'non-stream';
 export type BattleReportGenerationListSort = 'started_at_desc' | 'started_at_asc';
+export type BattleReportPublicListSort = 'published_at_desc' | 'published_at_asc';
 
 export type BattleReportGenerationsListFilter = {
   status?: BattleReportGenerationStatus;
@@ -12,6 +13,11 @@ export type BattleReportGenerationsListFilter = {
   pvpOnly?: boolean;
   titleQuery?: string;
   sort?: BattleReportGenerationListSort;
+};
+
+export type BattleReportPublicListFilter = {
+  titleQuery?: string;
+  sort?: BattleReportPublicListSort;
 };
 
 export interface BattleReportGenerationInsert {
@@ -31,6 +37,7 @@ export interface BattleReportGenerationInsert {
   cfCountry?: string | null;
   userId?: number | null;
   username?: string | null;
+  note?: string | null;
   userPrefix?: string | null;
   mode: string;
   scenarioTitle?: string | null;
@@ -86,6 +93,7 @@ export interface BattleReportGenerationRowLite {
   generation_mode: BattleReportGenerationMode;
   endpoint: string;
   user_id: number | null;
+  username: string | null;
   mode: string;
   scenario_title: string | null;
   ai_model: string | null;
@@ -96,6 +104,7 @@ export interface BattleReportGenerationRowLite {
   story_length: string | null;
   headline: string | null;
   winner: string | null;
+  note: string | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
   total_tokens: number | null;
@@ -104,6 +113,8 @@ export interface BattleReportGenerationRowLite {
   output_preview: string | null;
   output_has_sensitive_words: number | null;
   output_has_shield_words: number | null;
+  is_public: number;
+  public_since: string | null;
   extra_json: string | null;
   pvp_room_id: string | null;
   pvp_match_id: string | null;
@@ -172,6 +183,24 @@ type BattleReportGenerationsRepoBundle = {
     outputHasSensitiveWords: boolean,
     nowIso: string,
   ) => Promise<boolean>;
+  updateBattleReportGenerationPublication: (
+    db: unknown,
+    generationId: string,
+    isPublic: boolean,
+    nowIso: string,
+    mode?: string | null,
+  ) => Promise<boolean>;
+  updateBattleReportGenerationNote: (
+    db: unknown,
+    generationId: string,
+    note: string | null,
+  ) => Promise<boolean>;
+  listPublicBattleReportGenerationsLite: (
+    db: unknown,
+    limit: number,
+    offset: number,
+    filter?: BattleReportPublicListFilter,
+  ) => Promise<BattleReportGenerationRowLite[]>;
 };
 
 const readBattleReportGenerationsRepoBundle = async (): Promise<BattleReportGenerationsRepoBundle | null> => {
@@ -194,6 +223,9 @@ const readBattleReportGenerationsRepoBundle = async (): Promise<BattleReportGene
       updateBattleReportGenerationExtraJson: repo.updateBattleReportGenerationExtraJson as BattleReportGenerationsRepoBundle['updateBattleReportGenerationExtraJson'],
       countBattleReportGenerationsByUserIdSince: repo.countBattleReportGenerationsByUserIdSince as BattleReportGenerationsRepoBundle['countBattleReportGenerationsByUserIdSince'],
       updateBattleReportGenerationOutputHasSensitiveWords: repo.updateBattleReportGenerationOutputHasSensitiveWords as BattleReportGenerationsRepoBundle['updateBattleReportGenerationOutputHasSensitiveWords'],
+      updateBattleReportGenerationPublication: repo.updateBattleReportGenerationPublication as BattleReportGenerationsRepoBundle['updateBattleReportGenerationPublication'],
+      updateBattleReportGenerationNote: repo.updateBattleReportGenerationNote as BattleReportGenerationsRepoBundle['updateBattleReportGenerationNote'],
+      listPublicBattleReportGenerationsLite: repo.listPublicBattleReportGenerationsLite as BattleReportGenerationsRepoBundle['listPublicBattleReportGenerationsLite'],
     };
   } catch {
     return null;
@@ -388,5 +420,53 @@ export async function updateBattleReportGenerationOutputHasSensitiveWords(
   } catch (error) {
     console.error('更新 battle_report_generations.output_has_sensitive_words 失败:', error);
     return false;
+  }
+}
+
+export async function updateBattleReportGenerationPublication(
+  generationId: string,
+  isPublic: boolean,
+  mode?: string | null,
+): Promise<boolean> {
+  const id = typeof generationId === 'string' ? generationId.trim() : '';
+  if (!id) return false;
+  try {
+    const bundle = await readBattleReportGenerationsRepoBundle();
+    if (!bundle) return false;
+    return await bundle.updateBattleReportGenerationPublication(bundle.db, id, isPublic, new Date().toISOString(), mode);
+  } catch (error) {
+    console.error('更新战报公开状态失败:', error);
+    return false;
+  }
+}
+
+export async function updateBattleReportGenerationNote(
+  generationId: string,
+  note: string | null,
+): Promise<boolean> {
+  const id = typeof generationId === 'string' ? generationId.trim() : '';
+  if (!id) return false;
+  try {
+    const bundle = await readBattleReportGenerationsRepoBundle();
+    if (!bundle) return false;
+    return await bundle.updateBattleReportGenerationNote(bundle.db, id, note,);
+  } catch (error) {
+    console.error('更新战报备注失败:', error);
+    return false;
+  }
+}
+
+export async function getPublicBattleReportGenerations(
+  limit: number,
+  offset = 0,
+  filter?: BattleReportPublicListFilter,
+): Promise<BattleReportGenerationRowLite[]> {
+  try {
+    const bundle = await readBattleReportGenerationsRepoBundle();
+    if (!bundle) return [];
+    return await bundle.listPublicBattleReportGenerationsLite(bundle.db, limit, offset, filter);
+  } catch (error) {
+    console.error('读取公开战报失败:', error);
+    return [];
   }
 }

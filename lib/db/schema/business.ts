@@ -922,6 +922,13 @@ export const adminUserAnalyticsDaily = sqliteTable('admin_user_analytics_daily',
   updatedAtIndex: index('idx_admin_user_analytics_daily_updated_at').on(table.updatedAt),
 }));
 
+export const siteSettings = sqliteTable('site_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedByUserId: integer('updated_by_user_id'),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const largeObjects = sqliteTable('large_objects', {
   id: text('id').primaryKey(),
   kind: text('kind').notNull(),
@@ -1054,6 +1061,7 @@ export const battleReportGenerations = sqliteTable('battle_report_generations', 
   aiModel: text('ai_model'),
   headline: text('headline'),
   winner: text('winner'),
+  note: text('note'),
   outputChars: integer('output_chars'),
   outputBytes: integer('output_bytes'),
   promptTokens: integer('prompt_tokens'),
@@ -1064,6 +1072,8 @@ export const battleReportGenerations = sqliteTable('battle_report_generations', 
   outputPreview: text('output_preview'),
   outputHasSensitiveWords: integer('output_has_sensitive_words'),
   outputHasShieldWords: integer('output_has_shield_words'),
+  isPublic: integer('is_public').notNull().default(0),
+  publicSince: text('public_since'),
   combatantsWriteOk: integer('combatants_write_ok'),
   combatantsRowCount: integer('combatants_row_count'),
   combatantsWriteError: text('combatants_write_error'),

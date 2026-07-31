@@ -88,6 +88,16 @@ export const featureCategories: FeatureCategory[] = [
         color: 'white'
       },
       {
+        id: 'public-cards',
+        src: '/character-manager-white.svg',
+        width: 240,
+        height: 100,
+        alt: '公开角色卡',
+        href: '/public-cards',
+        className: 'public-cards',
+        color: 'white'
+      },
+      {
         id: 'tavern-ecosystem',
         src: '/tavern-white.svg',
         width: 240,
@@ -132,6 +142,16 @@ export const featureCategories: FeatureCategory[] = [
         alt: 'PVP 卡牌对决',
         href: '/pvp',
         className: 'card-duel',
+        color: 'white'
+      },
+      {
+        id: 'arena-reports',
+        src: '/arena-white.svg',
+        width: 240,
+        height: 100,
+        alt: '公开战报展览',
+        href: '/arena-reports',
+        className: 'arena-reports',
         color: 'white'
       }
     ]

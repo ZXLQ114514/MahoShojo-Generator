@@ -707,7 +707,7 @@ describe('auth 全链路集成', () => {
 
     expect(registerResp.status).toBe(400);
     const payload = (await registerResp.json()) as { error?: string };
-    expect(payload.error).toContain('用户名、邮箱、密码和安全验证不能为空');
+    expect(payload.error).toContain('用户名、邮箱和密码不能为空');
   });
 
   test('recover 允许仅凭邮箱发起找回', async () => {
