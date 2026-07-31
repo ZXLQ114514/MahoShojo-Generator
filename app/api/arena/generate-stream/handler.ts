@@ -6,7 +6,7 @@ import magicalGirlQuestionnaire from '@/public/questionnaires/presets/magical-gi
 import canshouQuestionnaire from '@/public/questionnaires/presets/canshou-default.json';
 import { config as appConfig, SafetyCheckPolicy, type AIProvider } from '@/lib/config';
 import { AI_PROVIDER_CATALOG, resolveAIProviderModel } from '@/lib/ai/constants';
-import { quickCheck } from '@/lib/sensitive-word-filter';
+import { containsSensitiveWord } from '@/lib/sensitive-word-filter';
 import { buildPolicySafetyCheckText } from '@/lib/content-safety/server';
 import { NextRequest } from 'next/server';
 import { AdjudicationResult, NarrativeHistoryEntry } from '@/types/arena';
@@ -51,6 +51,8 @@ import {
 } from '@/lib/arena/battle-report-log-utils';
 import { createOutputPreviewCollector } from '@/lib/arena/output-preview';
 import { settleArenaRatingsForGeneration } from '@/lib/database/arena-ratings';
+import { readGenerationRankingForGeneration } from '@/app/api/arena/generation-ranking/handler';
+import type { GenerationRankingResponse } from '@/lib/arena/generation-ranking';
 import { storeBattleReportGenerationOutputStreamToR2 } from '@/lib/arena/battle-report-output-storage';
 import { deleteObject } from '@/lib/r2';
 import { createRequestAuthUserResolver } from '@/lib/auth/request-auth-user';
@@ -61,6 +63,13 @@ import { summarizeStreamBattleReportPreview } from '@/lib/arena/stream-report-su
 import { normalizeCustomStoryLength, resolveEffectiveStoryLength } from '@/lib/story-length';
 import { buildEmptyStreamOutputErrorPayload } from '@/lib/arena/stream-empty-output';
 import { MAX_ARENA_MATERIALS, normalizeArenaMaterialsForRequest } from '@/lib/arena/materials';
+import {
+    ArenaStreamInputError,
+    parseArenaStreamRequestBody,
+    prepareArenaStreamInput,
+} from '@/lib/arena/generate-stream-input';
+import { sha256Hex } from '@/lib/pvp/crypto';
+import { isArenaAbortFastPathEnabled } from '@/lib/arena/generate-stream-finalization';
 
 const log = getLogger('api-gen-battle-stream');
 
@@ -195,7 +204,8 @@ async function handler(req: NextRequest): Promise<Response> {
                 return fallback;
             };
 
-            const body = await req.json();
+            const body = await parseArenaStreamRequestBody(req);
+            const preparedInput = prepareArenaStreamInput(body);
             const {
                 combatants,
             mode = 'classic',
@@ -299,7 +309,7 @@ async function handler(req: NextRequest): Promise<Response> {
           snapshotPvpRoundId = parsedPvpContext?.roundId ?? null;
 
           const finalInternalGuidance =
-              typeof internalGuidance === 'string' ? internalGuidance.trim().slice(0, 4000) : null;
+              typeof internalGuidance === 'string' ? internalGuidance.trim() || null : null;
           const shouldForceStreamMeta = forceStreamMeta === true;
 
         const resolvedReadArenaHistory = typeof readArenaHistory === 'boolean'
@@ -470,20 +480,20 @@ async function handler(req: NextRequest): Promise<Response> {
         // 内容安全检查
         const inputsToCheck: { type: keyof SafetyCheckPolicy, content: string, isNative: boolean }[] = [];
 
-        const finalUserGuidance = typeof userGuidance === 'string' ? userGuidance.trim().slice(0, 200) || null : null;
+        const finalUserGuidance = typeof userGuidance === 'string' ? userGuidance.trim() || null : null;
         snapshotHasUserGuidance = Boolean(finalUserGuidance);
         snapshotUserGuidancePreview = finalUserGuidance
             ? buildContentPreview(finalUserGuidance, { headChars: 300, tailChars: 300 })
             : null;
         snapshotAdjudicationEventsPreview = Array.isArray(adjudicationEvents)
-            ? buildContentPreview(JSON.stringify(adjudicationEvents), { headChars: 300, tailChars: 300 })
+            ? buildContentPreview(preparedInput.serialize(adjudicationEvents, '判定事件'), { headChars: 300, tailChars: 300 })
             : null;
         const characterGuidancesForReport =
             Array.isArray(combatants)
                 ? (combatants as any[])
                     .map((c) => {
                         const characterName = (c?.data?.codename || c?.data?.name || '').toString().trim();
-                        const guidance = typeof c?.characterGuidance === 'string' ? c.characterGuidance.trim().slice(0, 100) : '';
+                        const guidance = typeof c?.characterGuidance === 'string' ? c.characterGuidance.trim() : '';
                         if (!characterName || !guidance) return null;
                         return { characterName, guidance };
                     })
@@ -518,25 +528,25 @@ async function handler(req: NextRequest): Promise<Response> {
         }
         if (scenario) {
             const isNative = await verifySignature(scenario);
-            inputsToCheck.push({ type: 'scenario', content: JSON.stringify(scenario), isNative });
+            inputsToCheck.push({ type: 'scenario', content: preparedInput.serialize(scenario, '情景'), isNative });
         }
         if (normalizedAuxScenarios && normalizedAuxScenarios.length > 0) {
             for (const aux of normalizedAuxScenarios) {
                 const isNative = await verifySignature(aux);
-                inputsToCheck.push({ type: 'scenario', content: JSON.stringify(aux), isNative });
+                inputsToCheck.push({ type: 'scenario', content: preparedInput.serialize(aux, '辅助情景'), isNative });
             }
         }
         if (normalizedMaterials.length > 0) {
             for (const material of normalizedMaterials) {
                 inputsToCheck.push({
                     type: 'userGuidance',
-                    content: JSON.stringify(material.content),
+                    content: preparedInput.serialize(material.content, '素材'),
                     isNative: material.isNative,
                 });
             }
         }
         combatants.forEach((c: any) => {
-            inputsToCheck.push({ type: 'character', content: JSON.stringify(c.data), isNative: c.isNative });
+            inputsToCheck.push({ type: 'character', content: preparedInput.serialize(c.data, '角色'), isNative: c.isNative });
         });
 
 		    const { combinedText, usedBundle } = buildPolicySafetyCheckText(inputsToCheck, {
@@ -549,8 +559,12 @@ async function handler(req: NextRequest): Promise<Response> {
 	        const needsWorldviewWarning = false;
 
 	        if (combinedText) {
-	            if (appConfig.ENABLE_SENSITIVE_WORD_FILTER && (await quickCheck(combinedText)).hasSensitiveWords) {
-	                log.warn('检测到敏感词 (本地过滤)，请求被拒绝', { text: combinedText });
+	            if (appConfig.ENABLE_SENSITIVE_WORD_FILTER && await containsSensitiveWord(combinedText)) {
+	                log.warn('检测到敏感词 (本地过滤)，请求被拒绝', {
+                        inputChars: combinedText.length,
+                        inputHash: await sha256Hex(combinedText),
+                        matchType: 'boolean-fast-path',
+                    });
 
 	                const endedAtMs = Date.now();
 	                const endedAtIso = new Date(endedAtMs).toISOString();
@@ -712,8 +726,8 @@ async function handler(req: NextRequest): Promise<Response> {
         const aiOptions: GenerateWithAIOptions = {
             ...(providerOptions ?? {}),
             abortSignal: req.signal,
-            // 战报可能长思考/长生成超过 600s：上游读流改为 soft，避免误杀。
-            streamReadTimeoutMode: 'soft',
+            // 战报服务端必须有资源上限；客户端仍可显示“生成较慢”提示。
+            streamReadTimeoutMode: 'hard',
             telemetry: aiTelemetry,
             channelContext,
             ...(wantsSse
@@ -808,6 +822,7 @@ async function handler(req: NextRequest): Promise<Response> {
         const ip = getClientIpFromHeaders(req.headers);
         const ipAnonymized = anonymizeIp(ip);
         let r2UploadPromise: Promise<Awaited<ReturnType<typeof storeBattleReportGenerationOutputStreamToR2>>> | null = null;
+        const r2UploadAbortController = new AbortController();
 
         let outputBytes = 0;
         let outputChars = 0;
@@ -823,8 +838,65 @@ async function handler(req: NextRequest): Promise<Response> {
         let finalized = false;
         const executionContext = (req as any).context;
 
-        const finalizeOnce = async (status: 'completed' | 'aborted' | 'failed', errorMessage?: string) => {
-            if (finalized) return;
+        let finalizedRanking: GenerationRankingResponse | null = null;
+        const finalizeAborted = async (errorMessage?: string): Promise<void> => {
+            r2UploadAbortController?.abort('client disconnected');
+
+            const endedAtMs = Date.now();
+            const recordPromise = (async () => {
+                const user = await battleReportWriteContext.getAuthUser();
+                await createBattleReportGenerationRecord({
+                    id: generationId,
+                    startedAt: startedAtIso,
+                    endedAt: new Date(endedAtMs).toISOString(),
+                    durationMs: Math.max(0, endedAtMs - startedAtMs),
+                    status: 'aborted',
+                    generationMode: 'stream',
+                    endpoint: 'api/arena/generate-stream',
+                    ip,
+                    ipAnonymized,
+                    userAgent: req.headers.get('user-agent'),
+                    referer: req.headers.get('referer'),
+                    acceptLanguage: req.headers.get('accept-language'),
+                    cfRay: req.headers.get('cf-ray'),
+                    cfCountry: req.headers.get('cf-ipcountry'),
+                    userId: user?.id ?? null,
+                    username: user?.username ?? null,
+                    userPrefix: user?.prefix ?? null,
+                    mode,
+                    language: normalizeOptionalString(language),
+                    selectedLevel: null,
+                    storyLength: resolveEffectiveStoryLength(normalizeOptionalString(storyLength), customStoryLength) ?? null,
+                    combatantCount: Array.isArray(combatants) ? combatants.length : null,
+                    hasScenario: Boolean(scenario),
+                    hasUserGuidance: Boolean(finalUserGuidance),
+                    hasAdjudicationEvents: Array.isArray(adjudicationEvents) && adjudicationEvents.length > 0,
+                    hasTeams: Boolean(teams && typeof teams === 'object' && Object.keys(teams).length > 0),
+                    inputChars: preparedInput.inputChars,
+                    inputBytes: preparedInput.inputBytes,
+                    outputChars,
+                    outputBytes,
+                    outputPreview: null,
+                    extraJson: compactExtraJson({
+                        errorMessage: normalizeErrorMessage(errorMessage),
+                        stage: 'client-disconnect-fast-path',
+                        abortFastPath: true,
+                    }),
+                });
+            })();
+
+            if (executionContext?.waitUntil) {
+                executionContext.waitUntil(recordPromise);
+            } else {
+                await recordPromise;
+            }
+        };
+
+        const finalizeOnce = async (
+            status: 'completed' | 'aborted' | 'failed',
+            errorMessage?: string,
+        ): Promise<GenerationRankingResponse | null> => {
+            if (finalized) return finalizedRanking;
             finalized = true;
 
             const endedAtMs = Date.now();
@@ -836,6 +908,15 @@ async function handler(req: NextRequest): Promise<Response> {
               status === 'completed' && outputBytes <= 0 ? 'failed' : status;
             const normalizedErrorMessage =
               normalizedStatus !== status ? (errorMessage || 'empty output') : errorMessage;
+
+            if (normalizedStatus === 'aborted' && isArenaAbortFastPathEnabled()) {
+                try {
+                    await finalizeAborted(normalizedErrorMessage);
+                } catch (writeError) {
+                    log.warn('战报生成记录：中止轻量写入失败', { writeError });
+                }
+                return null;
+            }
 
             const { outputPreview } = previewCollector.finish();
             const previewSource = outputPreview;
@@ -864,19 +945,12 @@ async function handler(req: NextRequest): Promise<Response> {
                 const auxScenarioCount = normalizedAuxScenarios ? normalizedAuxScenarios.length : 0;
 
                 const shieldResult = applyShieldWords(outputPreview);
-                const outputSensitive = appConfig.ENABLE_SENSITIVE_WORD_FILTER
-                    ? await quickCheck(outputPreview)
-                    : { hasSensitiveWords: false };
+                const outputHasSensitiveWords = appConfig.ENABLE_SENSITIVE_WORD_FILTER
+                    ? await containsSensitiveWord(outputPreview)
+                    : false;
                 const combatantsFallback = buildCombatantsFallbackForExtraJson(combatants);
 
-                const inputJson = JSON.stringify({
-                    combatants,
-                    userGuidance: finalUserGuidance,
-                    scenario,
-                    materials: normalizedMaterials,
-                    teams,
-                });
-                const inputBytes = new TextEncoder().encode(inputJson).length;
+                const { inputBytes, inputChars } = preparedInput;
 
                     const extraJsonBase = compactExtraJson({
                         errorMessage: normalizeErrorMessage(normalizedErrorMessage),
@@ -950,11 +1024,11 @@ async function handler(req: NextRequest): Promise<Response> {
                     hasUserGuidance: Boolean(finalUserGuidance),
                     hasAdjudicationEvents: Array.isArray(adjudicationEvents) && adjudicationEvents.length > 0,
                     hasTeams: Boolean(teams && typeof teams === 'object' && Object.keys(teams).length > 0),
-                    inputChars: inputJson.length,
+                    inputChars,
                     inputBytes,
                     userGuidancePreview: finalUserGuidance ? buildContentPreview(finalUserGuidance, { headChars: 300, tailChars: 300 }) : null,
                     adjudicationEventsPreview: Array.isArray(adjudicationEvents)
-                        ? buildContentPreview(JSON.stringify(adjudicationEvents), { headChars: 300, tailChars: 300 })
+	                        ? buildContentPreview(preparedInput.serialize(adjudicationEvents, '判定事件'), { headChars: 300, tailChars: 300 })
                         : null,
                     customProviderId: customProviderId ?? null,
                     customModelId: customProviderPayload?.modelId ?? null,
@@ -972,7 +1046,7 @@ async function handler(req: NextRequest): Promise<Response> {
                     cachedTokens: usage?.cachedTokens ?? null,
                     reasoningTokens: usage?.reasoningTokens ?? null,
 	                    outputPreview,
-	                    outputHasSensitiveWords: Boolean((outputSensitive as any)?.hasSensitiveWords),
+	                    outputHasSensitiveWords,
 	                    outputHasShieldWords: shieldResult.hasShieldWords,
 		                    extraJson: extraJsonBase,
 		                });
@@ -1008,38 +1082,61 @@ async function handler(req: NextRequest): Promise<Response> {
 	                        }
 	                    }
 
-	                    const stored = r2UploadPromise ? await r2UploadPromise.catch(() => null) : null;
-		                    if (stored?.ok && stored.r2Key) {
-		                        if (normalizedStatus === 'completed') {
-		                            const indexed = await upsertLargeObjectByOwnerRef({
-                                kind: 'battle_report_generation_output',
-                                ownerRefId: generationId,
-                                ownerUserId: user?.id ?? null,
-                                r2Key: stored.r2Key,
-                                bytes: stored.bytes,
-                                storedBytes: stored.storedBytes,
-                                contentType: stored.contentType,
-                                contentEncoding: stored.contentEncoding,
-                                sha256: null,
-                            });
-                            if (indexed.ok && !stored.persistPreviewInD1) {
-                                await updateBattleReportGenerationOutputPreview(generationId, null);
+
+                    let rankingResult: GenerationRankingResponse | null = null;
+                    if (createdId && normalizedStatus === 'completed') {
+                        try {
+                            rankingResult = await readGenerationRankingForGeneration(generationId);
+                        } catch (error) {
+                            log.warn('排位结果读取失败（降级为恢复查询）', { recordId: generationId, error });
+                        }
+                    }
+
+                    const finalizeBackground = async () => {
+                        const stored = r2UploadPromise ? await r2UploadPromise.catch(() => null) : null;
+                        if (stored?.ok && stored.r2Key) {
+                            if (normalizedStatus === 'completed') {
+                                const indexed = await upsertLargeObjectByOwnerRef({
+                                    kind: 'battle_report_generation_output',
+                                    ownerRefId: generationId,
+                                    ownerUserId: user?.id ?? null,
+                                    r2Key: stored.r2Key,
+                                    bytes: stored.bytes,
+                                    storedBytes: stored.storedBytes,
+                                    contentType: stored.contentType,
+                                    contentEncoding: stored.contentEncoding,
+                                    sha256: null,
+                                });
+                                if (indexed.ok && !stored.persistPreviewInD1) {
+                                    await updateBattleReportGenerationOutputPreview(generationId, null);
+                                }
+                            } else {
+                                await deleteObject(stored.r2Key);
                             }
-                        } else {
-		                            await deleteObject(stored.r2Key);
-		                        }
-		                    }
+                        }
+                    };
+                    const backgroundPromise = finalizeBackground();
+                    if (executionContext?.waitUntil) {
+                        executionContext.waitUntil(backgroundPromise);
+                    } else {
+                        await backgroundPromise;
+                    }
+
+                    return rankingResult;
 		            })();
 
             try {
-                if (executionContext?.waitUntil) {
+                if (normalizedStatus === 'completed') {
+                    finalizedRanking = await recordPromise;
+                } else if (executionContext?.waitUntil) {
                     executionContext.waitUntil(recordPromise);
                 } else {
-                    await recordPromise;
+                    finalizedRanking = await recordPromise;
                 }
             } catch (writeError) {
                 log.warn('战报生成记录：写入失败', { writeError });
             }
+            return finalizedRanking;
         };
 
         const shouldAllowStreamMeta = shouldForceStreamMeta || resolvedWriteArenaHistory || resolvedWriteCurrentState;
@@ -1078,23 +1175,21 @@ async function handler(req: NextRequest): Promise<Response> {
                 generationId,
                 startedAtIso,
                 stream: r2Body,
+                signal: r2UploadAbortController.signal,
             });
 
             const reader = clientUpstream.getReader();
-            // 战报生成：超时仅记录日志，不主动切断上游（长思考/长生成可能超过 600s）。
             const readWithTimeout = createStreamReadWithTimeout({
                 label: 'api/arena/generate-stream SSE 上游读取',
-                mode: 'soft',
                 idleTimeoutMs: STREAM_READ_IDLE_TIMEOUT_MS,
                 totalTimeoutMs: STREAM_READ_TOTAL_TIMEOUT_MS,
                 getLastActivityAtMs: () => lastReasoningActivityAtMs,
-                onSoftTimeout: (event) => {
-                    log.warn('上游读流软超时（仅提示，不切断）', {
-                        kind: event.kind,
-                        timeoutMs: event.timeoutMs,
-                        elapsedMs: event.elapsedMs,
-                        generationId,
-                    });
+                onTimeout: (error) => {
+                    try {
+                        void reader.cancel(error.message).catch(() => {});
+                    } catch {
+                        // ignore cancellation race
+                    }
                 },
             });
 
@@ -1416,8 +1511,11 @@ async function handler(req: NextRequest): Promise<Response> {
 			                    return;
 			                }
 
+			                const rankingResult = await finalizeOnce('completed');
+                            if (rankingResult?.success) {
+                                controller.enqueue(encodeEvent('ranking', rankingResult));
+                            }
 			                controller.enqueue(encodeEvent('done', { ok: true }));
-			                await finalizeOnce('completed');
                             sseStreamClosed = true;
                             activeSseController = null;
                             flushReasoningQueueNow = null;
@@ -1434,7 +1532,7 @@ async function handler(req: NextRequest): Promise<Response> {
 		                    try {
 		                        // 简单背压：队列满时暂停读取上游，避免无界缓存
 		                        while (!sseCancelled && typeof controller.desiredSize === 'number' && controller.desiredSize <= 0) {
-		                            await new Promise((resolve) => setTimeout(resolve, 5));
+                            await new Promise((resolve) => setTimeout(resolve, 100));
 		                        }
 
 		                        const { done, value } = await readWithTimeout(reader);
@@ -1524,20 +1622,25 @@ async function handler(req: NextRequest): Promise<Response> {
             });
         }
 
-        const reader = originalBody.getReader();
-        // 战报生成：超时仅记录日志，不主动切断上游（长思考/长生成可能超过 600s）。
+        const [clientUpstream, r2Body] = originalBody.tee();
+        r2UploadPromise = storeBattleReportGenerationOutputStreamToR2({
+            generationId,
+            startedAtIso,
+            stream: r2Body,
+            signal: r2UploadAbortController.signal,
+        });
+
+        const reader = clientUpstream.getReader();
         const readWithTimeout = createStreamReadWithTimeout({
             label: 'api/arena/generate-stream 上游读取',
-            mode: 'soft',
             idleTimeoutMs: STREAM_READ_IDLE_TIMEOUT_MS,
             totalTimeoutMs: STREAM_READ_TOTAL_TIMEOUT_MS,
-            onSoftTimeout: (event) => {
-                log.warn('上游读流软超时（仅提示，不切断）', {
-                    kind: event.kind,
-                    timeoutMs: event.timeoutMs,
-                    elapsedMs: event.elapsedMs,
-                    generationId,
-                });
+            onTimeout: (error) => {
+                try {
+                    void reader.cancel(error.message).catch(() => {});
+                } catch {
+                    // ignore cancellation race
+                }
             },
         });
         const wrappedBody = new ReadableStream<Uint8Array>({
@@ -1621,18 +1724,17 @@ async function handler(req: NextRequest): Promise<Response> {
             },
         });
 
-        const [clientBody, r2Body] = wrappedBody.tee();
-        r2UploadPromise = storeBattleReportGenerationOutputStreamToR2({
-            generationId,
-            startedAtIso,
-            stream: r2Body,
-        });
-
-        return new Response(clientBody, {
+        return new Response(wrappedBody, {
             status: streamResponse.status,
             headers,
         });
 	    } catch (error) {
+	        if (error instanceof ArenaStreamInputError) {
+                return new Response(JSON.stringify({ error: error.message, code: error.code }), {
+                    status: error.status,
+                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                });
+            }
 	        log.error('生成战斗故事时发生顶层错误', { error });
 	        const errorMessage = error instanceof Error ? error.message : '未知错误';
 
@@ -1647,6 +1749,42 @@ async function handler(req: NextRequest): Promise<Response> {
 	        const recordPromise = (async () => {
 	            try {
 	                const user = await battleReportWriteContext.getAuthUser();
+                    if (statusForRecord === 'aborted' && isArenaAbortFastPathEnabled()) {
+                        await createBattleReportGenerationRecord({
+                            id: snapshotGenerationId ?? undefined,
+                            startedAt: startedAtIso,
+                            endedAt: endedAtIso,
+                            durationMs,
+                            status: 'aborted',
+                            generationMode: 'stream',
+                            endpoint: 'api/arena/generate-stream',
+                            ip,
+                            ipAnonymized,
+                            userAgent: req.headers.get('user-agent'),
+                            referer: req.headers.get('referer'),
+                            acceptLanguage: req.headers.get('accept-language'),
+                            cfRay: req.headers.get('cf-ray'),
+                            cfCountry: req.headers.get('cf-ipcountry'),
+                            userId: user?.id ?? null,
+                            username: user?.username ?? null,
+                            userPrefix: user?.prefix ?? null,
+                            mode: snapshotMode,
+                            language: snapshotLanguage,
+                            selectedLevel: null,
+                            storyLength: snapshotStoryLength,
+                            combatantCount: Array.isArray(snapshotCombatants) ? snapshotCombatants.length : null,
+                            hasScenario: snapshotHasScenario,
+                            hasUserGuidance: snapshotHasUserGuidance,
+                            hasAdjudicationEvents: snapshotHasAdjudicationEvents,
+                            hasTeams: snapshotHasTeams,
+                            extraJson: compactExtraJson({
+                                errorMessage: normalizeErrorMessage(errorMessage),
+                                stage: 'top-level-abort-fast-path',
+                                abortFastPath: true,
+                            }),
+                        });
+                        return;
+                    }
                     const errorExtraJsonBase = compactExtraJson({
                         errorMessage,
                         stage: 'top-level-catch',
