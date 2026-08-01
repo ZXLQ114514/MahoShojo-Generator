@@ -66,6 +66,7 @@ import { CreatorStructuredResultCard } from '@/components/creator/CreatorStructu
 import { CreatorWorkbenchPage } from '@/components/creator/CreatorWorkbenchPage';
 import { MarkdownBlock } from '@/components/MarkdownBlock';
 import { CREATOR_PAGE_COPY } from '@/lib/creator/page-copy';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 import {
   DEFAULT_CREATOR_GENERATION_MODE,
   getDefaultCreatorTemplateForGenerationMode,
@@ -722,9 +723,8 @@ export const CreatorPage: React.FC = () => {
       ? streamedGeneralCardForDisplay.name.trim()
       : '';
     const contentRaw = (normalizedStreamingMarkdown ?? streamedGeneralCard?.content ?? '').trim();
-    const contentHead = contentRaw.length > 800 ? contentRaw.slice(0, 800) : contentRaw;
-    const prefix = [name, contentHead].filter(Boolean).join(', ');
-    return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
+    void name;
+    return buildCharacterPortraitPrompt({ description: contentRaw, characterType: 'general' });
   }, [hasStreamCreatorResult, creatorDisplayState.generationMode, streamedGeneralCardForDisplay, normalizedStreamingMarkdown, streamedGeneralCard]);
 
   const isScenarioStreamResult = useMemo(() => {

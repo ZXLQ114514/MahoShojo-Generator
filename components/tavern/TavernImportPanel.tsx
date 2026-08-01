@@ -43,7 +43,7 @@ import { buildTavernScenarioFragment } from '@/lib/tavern-card/scenario';
 import type { CanshouData, GeneralCharacterData, GeneralScenarioData, MagicalGirlData, ScenarioData } from '@/lib/schemas';
 import type { AIReasoningEnvelope } from '@/types/ai-reasoning';
 import { useAuth } from '@/lib/useAuth';
-import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 
 import { TavernCardPreview } from './TavernCardPreview';
 
@@ -995,20 +995,20 @@ export function TavernImportPanel() {
     if (outputTemplateForPreview === 'magical-girl') {
       const record = isRecord(outputDataCard) ? outputDataCard : {};
       const appearance = isRecord(record.appearance) ? record.appearance : {};
-      return `${formatImagePromptAppearance(appearance)}，二次元，魔法少女`;
+      return buildCharacterPortraitPrompt({ appearance, characterType: 'magical-girl' });
     }
 
     if (outputTemplateForPreview === 'canshou') {
       const safe = normalizeCanshouForCard(outputDataCard);
       const parts = [safe.appearance, safe.materialAndSkin, safe.featuresAndAppendages].filter((item) => typeof item === 'string' && item.trim());
-      return `${parts.join(', ')}, 二次元`;
+      return buildCharacterPortraitPrompt({ appearance: parts.join('，'), characterType: 'canshou' });
     }
 
     const record = isRecord(outputDataCard) ? outputDataCard : {};
     const name = ensureString(record.name).trim();
     const content = ensureString(record.content).trim();
-    const head = content.length > 800 ? content.slice(0, 800) : content;
-    return `${name ? `${name}, ` : ''}${head}, 二次元, 角色立绘`;
+    void name;
+    return buildCharacterPortraitPrompt({ description: content, characterType: 'general' });
   }, [outputDataCard, outputTemplateForPreview]);
 
   const outputJsonPayload = useMemo(() => {

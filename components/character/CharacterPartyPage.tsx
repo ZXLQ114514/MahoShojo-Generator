@@ -21,7 +21,7 @@ import { mapDataCardSourceMeta, mapPublicDataCardRowToBattleSelectionPayload } f
 import { COLOR_GRADIENTS, MainColor } from '@/lib/main-color';
 import { inferTemplate, TEMPLATE_LABELS, type InferableTemplate } from '@/lib/data-card-converter';
 import { mergeTeamDataCards, type TeamMergeOutputTemplate } from '@/lib/team/merge-team-cards';
-import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
 import { readCharacterPortraitAsset, withCharacterPortraitAsset } from '@/lib/visual-asset/persistence';
 
@@ -110,14 +110,12 @@ const buildTachiePrompt = (data: Record<string, unknown>): string => {
 
   if (isMagicalGirl && isPlainObject(data.appearance)) {
     const appearance = data.appearance as Record<string, unknown>;
-    const appearanceString = formatImagePromptAppearance(appearance);
-    return `${appearanceString}, 二次元, 魔法少女`;
+    return buildCharacterPortraitPrompt({ appearance, characterType: 'magical-girl' });
   }
 
   if (!isMagicalGirl && hasContentField) {
-    const head = content.length > 800 ? content.slice(0, 800) : content;
-    const prefix = [name, head].filter(Boolean).join(', ');
-    return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
+    void name;
+    return buildCharacterPortraitPrompt({ description: content, characterType: 'general' });
   }
 
   if (!isMagicalGirl && name) {

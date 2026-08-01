@@ -31,7 +31,7 @@ import { useAuth } from '@/lib/useAuth';
 import { dataCardApi, authStorage } from '@/lib/auth';
 import { loadAuthMigrationStatus, type AuthMigrationStatus } from '@/components/me/authMigrationStatus';
 import { getDataCardVisibilityValue } from '@/lib/data-card-status';
-import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 
 // 引入 AdjudicatorEditor 和新类型
 import AdjudicatorEditor from '@/components/AdjudicatorEditor';
@@ -1010,8 +1010,7 @@ export const CharacterManagerPage: React.FC = () => {
         if (currentTemplate === 'magical-girl') {
             const appearance = characterData.appearance;
             if (appearance && typeof appearance === 'object' && !Array.isArray(appearance)) {
-                const appearanceString = formatImagePromptAppearance(appearance);
-                newPrompt = `${appearanceString}, 二次元, 魔法少女`;
+                newPrompt = buildCharacterPortraitPrompt({ appearance, characterType: 'magical-girl' });
             }
         } else if (currentTemplate === 'canshou') {
             const parts = [
@@ -1021,13 +1020,12 @@ export const CharacterManagerPage: React.FC = () => {
             ]
                 .map((item: unknown) => (typeof item === 'string' ? item.trim() : ''))
                 .filter(Boolean);
-            newPrompt = parts.join(', ');
+            newPrompt = buildCharacterPortraitPrompt({ appearance: parts.join('，'), characterType: 'canshou' });
         } else if (currentTemplate === 'general') {
             const name = typeof characterData.name === 'string' ? characterData.name.trim() : '';
             const content = typeof characterData.content === 'string' ? characterData.content.trim() : '';
-            const head = content.length > 800 ? content.slice(0, 800) : content;
-            const prefix = [name, head].filter(Boolean).join(', ');
-            newPrompt = `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
+            void name;
+            newPrompt = buildCharacterPortraitPrompt({ description: content, characterType: 'general' });
         }
 
         setTachiePrompt(newPrompt);
