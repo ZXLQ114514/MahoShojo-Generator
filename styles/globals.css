@@ -436,6 +436,28 @@ body {
   z-index: 1;
 }
 
+.admin-page-shell .admin-page-container {
+  width: 100%;
+  max-width: 1440px;
+  padding: 0 32px;
+}
+
+.admin-page-shell .admin-page-tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.admin-page-shell .admin-page-tabs > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .admin-page-shell .admin-page-container {
+    padding: 0 16px;
+  }
+}
+
 .card {
   background: var(--app-surface);
   border-radius: 20px;

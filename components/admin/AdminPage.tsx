@@ -270,8 +270,8 @@ export function AdminPage() {
   if (!isAuthenticated) return <main className="container py-10"><div className="rounded-lg border border-red-200 bg-red-50 p-5 text-red-800">请先登录后访问管理员工作台。</div></main>;
 
   return (
-    <main className="magic-background-white min-h-screen py-6">
-      <div className="container">
+    <main className="admin-page-shell magic-background-white min-h-screen py-6 lg:py-10">
+      <div className="container admin-page-container">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">MahoShojo Control</p>
@@ -280,7 +280,7 @@ export function AdminPage() {
           <Link href="/" className="text-sm text-blue-600 hover:underline">返回首页</Link>
         </div>
 
-        <div className="mb-4 flex gap-2 border-b border-gray-200">
+        <div className="admin-page-tabs mb-4 flex gap-2 border-b border-gray-200">
           {([['cards', '角色卡审核'], ['reports', '战报管理'], ['users', '用户管理'], ['licenses', '图片许可'], ['settings', '系统设置']] as const).map(([value, label]) => (
             <button key={value} type="button" onClick={() => setTab(value)} className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}>
               {label}
@@ -291,7 +291,7 @@ export function AdminPage() {
         {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div> : null}
         {notice ? <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{notice}</div> : null}
 
-        <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm lg:p-6">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div><h2 className="text-lg font-semibold">{title}</h2><p className="text-sm text-gray-500">所有操作均在服务端重新验证管理员权限，并记录审计日志。</p></div>
             {tab === 'cards' ? (
