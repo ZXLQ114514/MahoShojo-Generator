@@ -160,6 +160,8 @@ type RawUnifiedStreamChunk =
     | RawReasoningStreamEvent;
 
 export interface GenerateWithAIOptions {
+    /** 用于服务端日志，不接受或记录 API Key、邮箱等凭据。 */
+    username?: string | null;
     loadBalanceStrategy?: LoadBalanceStrategy;
     providerOverride?: AIProvider;
     abortSignal?: AbortSignal;
@@ -284,14 +286,18 @@ export async function generateWithStreamAI(
         const retryCount = provider.retryCount ?? 1;
         // 从可能的多个模型中选择一个，如果有模型覆盖则使用覆盖的模型
         const selectedModel = generationConfig.modelOverride || selectRandomModel(provider.model);
-        log.info(`开始使用提供商: ${provider.name} 模型: ${selectedModel} 重试次数: ${retryCount}`);
+        log.info(`开始使用提供商: ${provider.name} 模型: ${selectedModel} 重试次数: ${retryCount}`, {
+            username: options?.username?.trim() || '匿名用户',
+        });
 
         // 对当前提供商进行重试
 	        for (let attempt = 0; attempt < retryCount; attempt++) {
             // 同一 attempt 只记一次：在流真正结束（成功/失败/取消）时落分，而非首包时
             const outcomeRecorder = createAttemptOutcomeRecorder(options?.channelContext);
 	            try {
-                log.debug(`开始尝试: 提供商: ${provider.name} 模型: ${selectedModel} 尝试次数: ${attempt + 1} / ${retryCount}`);
+                log.debug(`开始尝试: 提供商: ${provider.name} 模型: ${selectedModel} 尝试次数: ${attempt + 1} / ${retryCount}`, {
+                    username: options?.username?.trim() || '匿名用户',
+                });
 
                 if (options?.telemetry) {
                     options.telemetry.providerName = provider.name;
@@ -531,7 +537,10 @@ export async function generateWithStreamAI(
                 // 使用工具函数增强错误信息
                 const enhancedError = enhanceErrorWithUpstreamMessage(error);
                 lastError = enhancedError;
-                log.error(`提供商 ${provider.name} 第 ${attempt + 1} 次失败`, { error: enhancedError });
+                log.error(`提供商 ${provider.name} 第 ${attempt + 1} 次失败`, {
+                    username: options?.username?.trim() || '匿名用户',
+                    error: enhancedError,
+                });
 
                 if (NoObjectGeneratedError.isInstance(error)) {
                     log.debug(`NoObjectGeneratedError 详情: 提供商: ${provider.name}`, {

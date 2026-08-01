@@ -29,6 +29,7 @@ const buildPayload = (caller: string | undefined, args: unknown[]): Record<strin
   const [firstArg, ...restArgs] = args;
   const firstRecord = toRecord(firstArg);
   const payload: Record<string, unknown> = {
+    timestamp: new Date().toISOString(),
     ...(caller ? { caller } : {}),
     ...(firstRecord ?? (typeof firstArg === 'undefined' ? {} : { data: firstArg })),
   };

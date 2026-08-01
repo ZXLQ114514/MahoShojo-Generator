@@ -187,6 +187,7 @@ async function handler(req: NextRequest): Promise<Response> {
         let snapshotGenerationId: string | null = null;
 
         try {
+            const requestUsername = (await authUserResolver.getUser())?.username ?? '匿名用户';
             const normalizeOptionalString = (value: unknown): string | null => {
                 if (typeof value !== 'string') return null;
                 const trimmed = value.trim();
@@ -725,6 +726,7 @@ async function handler(req: NextRequest): Promise<Response> {
         const channelContext = buildChannelContextFromPayload(customProviderPayload, customModelOverride);
         const aiOptions: GenerateWithAIOptions = {
             ...(providerOptions ?? {}),
+            username: requestUsername,
             abortSignal: req.signal,
             // 战报服务端必须有资源上限；客户端仍可显示“生成较慢”提示。
             streamReadTimeoutMode: 'hard',
