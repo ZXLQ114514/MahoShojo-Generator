@@ -499,7 +499,7 @@ export function NamePage() {
               <div className="text-center w-full" style={{ marginTop: '2rem' }}>
                 <h3 className="text-lg font-medium text-gray-900" style={{ marginBottom: '1rem' }}>立绘生成</h3>
                 <TachieGenerator
-                  prompt={`${JSON.stringify(magicalGirl.appearance)} , Xiabanmo, 二次元, 魔法少女`}
+                  prompt={`${JSON.stringify(magicalGirl.appearance)} , 二次元, 魔法少女`}
                 />
               </div>
             )}

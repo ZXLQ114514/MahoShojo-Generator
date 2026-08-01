@@ -183,7 +183,7 @@ const buildGeneralPortraitPrompt = (name: string, content: string): string => {
   const normalizedContent = typeof content === 'string' ? content.trim() : '';
   const head = normalizedContent.length > 800 ? normalizedContent.slice(0, 800) : normalizedContent;
   const prefix = [normalizedName, head].filter(Boolean).join(', ');
-  return `${prefix ? `${prefix}, ` : ''}Xiabanmo, 二次元, 角色立绘`;
+  return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
 };
 
 const buildCanshouPortraitPrompt = (input: Record<string, unknown>): string => {
@@ -814,7 +814,7 @@ export function FreePage() {
             <div className="text-center">
               <h3 className="text-lg font-medium text-blue-900 mb-4">生成立绘</h3>
               <CharacterPortraitAssetPanel
-                prompt={`${JSON.stringify(safe.appearance)} , Xiabanmo, 二次元, 魔法少女`}
+                prompt={`${JSON.stringify(safe.appearance)} , 二次元, 魔法少女`}
                 onPortraitAssetChange={setCharacterPortraitAsset}
               />
             </div>

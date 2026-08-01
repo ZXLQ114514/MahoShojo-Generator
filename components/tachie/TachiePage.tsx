@@ -68,7 +68,7 @@ export function TachiePage() {
             }}
           />
         </div>
-        <TachieGenerator prompt={`${prompt}, Xiabanmo, 二次元, 魔法少女`} />
+        <TachieGenerator prompt={`${prompt}, 二次元, 魔法少女`} />
 
         <div className="mt-12 text-center">
           <p className="text-sm text-gray-600">

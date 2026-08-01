@@ -322,7 +322,7 @@ export const buildBattleIllustrationPrompt = (input: BattleIllustrationPromptInp
   const visualMoment = extractVisualMoment(reportTail, VISUAL_MOMENT_MAX_CHARS);
 
   const sections: string[] = [];
-  sections.push('风格标签：Xiabanmo，二次元，魔法少女，剧情插画，视觉小说关键帧，cinematic lighting，高质量，干净画面。');
+  sections.push('风格标签：二次元魔法少女战斗插画，电影感光影，高质量，干净画面。');
   sections.push('硬性约束：单张插画，禁止出现任何文字、字母、数字、水印、Logo、字幕、对话框、UI 面板、海报排版、漫画分格。');
   if (headline) sections.push(`情绪关键词：${toCompactInlineText(headline)}`);
   if (appearanceSummary) sections.push(`角色外观：${appearanceSummary}`);

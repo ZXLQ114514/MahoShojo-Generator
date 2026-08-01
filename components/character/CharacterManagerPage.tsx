@@ -1011,7 +1011,7 @@ export const CharacterManagerPage: React.FC = () => {
                 const appearanceString = Object.entries(appearance)
                     .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
                     .join(', ');
-                newPrompt = `${appearanceString}, Xiabanmo, 二次元, 魔法少女`;
+                newPrompt = `${appearanceString}, 二次元, 魔法少女`;
             }
         } else if (currentTemplate === 'canshou') {
             const parts = [
@@ -1027,7 +1027,7 @@ export const CharacterManagerPage: React.FC = () => {
             const content = typeof characterData.content === 'string' ? characterData.content.trim() : '';
             const head = content.length > 800 ? content.slice(0, 800) : content;
             const prefix = [name, head].filter(Boolean).join(', ');
-            newPrompt = `${prefix ? `${prefix}, ` : ''}Xiabanmo, 二次元, 角色立绘`;
+            newPrompt = `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
         }
 
         setTachiePrompt(newPrompt);

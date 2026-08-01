@@ -155,8 +155,8 @@ const buildSuggestedPrompt = (params: {
 }): string => {
   const styleHint =
     params.kind === 'tachie'
-      ? 'Xiabanmo, 二次元, 魔法少女, 角色立绘, 全身, 单人, 站姿, 细节丰富, 高质量, 干净背景, 不要水印, 不要文字'
-      : 'Xiabanmo, 二次元, 魔法少女, 视觉小说, 剧情插画, 场景插图, cinematic lighting, 高质量, 干净画面, 不要水印, 不要文字';
+      ? '二次元魔法少女角色立绘，全身，单人，站姿，细节丰富，高质量，干净背景，无水印，无文字'
+      : '二次元魔法少女剧情插画，场景插图，电影感光影，高质量，干净画面，无水印，无文字';
 
   const scenarioTitle = params.scenario?.title?.trim() || '魔法茶会';
   const snippet = truncateText(params.referenceText || '', MAX_REFERENCE_CHARS);
@@ -185,7 +185,7 @@ const buildSuggestedPrompt = (params: {
     `场景：${scenarioTitle}`,
     castHint ? `登场角色：${castHint}` : '',
     snippet ? `剧情片段：${snippet}` : '',
-    '构图建议：画面中留出对白/字幕空间（视觉小说 UI 友好）。',
+    '构图建议：让角色和环境占满画面，不预留标题、对白或字幕区域。',
     `风格：${styleHint}`,
   ].filter(Boolean);
   return truncateText(parts.join('\n'), MAX_PROMPT_CHARS);

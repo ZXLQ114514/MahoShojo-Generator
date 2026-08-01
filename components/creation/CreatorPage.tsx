@@ -718,7 +718,7 @@ export const CreatorPage: React.FC = () => {
     const contentRaw = (normalizedStreamingMarkdown ?? streamedGeneralCard?.content ?? '').trim();
     const contentHead = contentRaw.length > 800 ? contentRaw.slice(0, 800) : contentRaw;
     const prefix = [name, contentHead].filter(Boolean).join(', ');
-    return `${prefix ? `${prefix}, ` : ''}Xiabanmo, 二次元, 角色立绘`;
+    return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
   }, [hasStreamCreatorResult, creatorDisplayState.generationMode, streamedGeneralCardForDisplay, normalizedStreamingMarkdown, streamedGeneralCard]);
 
   const isScenarioStreamResult = useMemo(() => {

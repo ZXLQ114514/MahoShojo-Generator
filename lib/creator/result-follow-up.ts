@@ -26,8 +26,8 @@ const buildMagicalGirlPortraitPrompt = (result: unknown): string => {
     .join(', ');
 
   return appearanceText
-    ? `${appearanceText}, Xiabanmo, 二次元, 魔法少女`
-    : 'Xiabanmo, 二次元, 魔法少女';
+    ? `${appearanceText}, 二次元, 魔法少女`
+    : '二次元, 魔法少女';
 };
 
 const buildCanshouPortraitPrompt = (result: unknown): string => {

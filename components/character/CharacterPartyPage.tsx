@@ -111,13 +111,13 @@ const buildTachiePrompt = (data: Record<string, unknown>): string => {
     const appearanceString = Object.entries(appearance)
       .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
       .join(', ');
-    return `${appearanceString}, Xiabanmo, 二次元, 魔法少女`;
+    return `${appearanceString}, 二次元, 魔法少女`;
   }
 
   if (!isMagicalGirl && hasContentField) {
     const head = content.length > 800 ? content.slice(0, 800) : content;
     const prefix = [name, head].filter(Boolean).join(', ');
-    return `${prefix ? `${prefix}, ` : ''}Xiabanmo, 二次元, 角色立绘`;
+    return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
   }
 
   if (!isMagicalGirl && name) {

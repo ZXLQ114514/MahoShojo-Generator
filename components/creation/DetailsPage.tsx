@@ -504,7 +504,7 @@ export const DetailsPage: React.FC = () => {
     const contentRaw = (streamingMarkdown ?? streamedGeneralCard?.content ?? '').trim();
     const contentHead = contentRaw.length > 800 ? contentRaw.slice(0, 800) : contentRaw;
     const prefix = [name, contentHead].filter(Boolean).join(', ');
-    return `${prefix ? `${prefix}, ` : ''}Xiabanmo, 二次元, 角色立绘`;
+    return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
   }, [generationMode, streamedGeneralCardForDisplay, streamingMarkdown, streamedGeneralCard]);
 
   useEffect(() => {
@@ -2613,7 +2613,7 @@ export const DetailsPage: React.FC = () => {
                 <div className="text-center">
                   <h3 className="text-lg font-medium text-blue-900" style={{ marginBottom: '1rem' }}>生成立绘</h3>
                   <CharacterPortraitAssetPanel
-                    prompt={`${JSON.stringify(magicalGirlDetails.appearance)} , Xiabanmo, 二次元, 魔法少女`}
+                    prompt={`${JSON.stringify(magicalGirlDetails.appearance)} , 二次元, 魔法少女`}
                     onPortraitAssetChange={setCharacterPortraitAsset}
                   />
                 </div>

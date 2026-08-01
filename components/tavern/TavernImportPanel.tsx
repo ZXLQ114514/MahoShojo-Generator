@@ -994,20 +994,20 @@ export function TavernImportPanel() {
     if (outputTemplateForPreview === 'magical-girl') {
       const record = isRecord(outputDataCard) ? outputDataCard : {};
       const appearance = isRecord(record.appearance) ? record.appearance : {};
-      return `${JSON.stringify(appearance)}, Xiabanmo, 二次元, 魔法少女`;
+      return `${JSON.stringify(appearance)}, 二次元, 魔法少女`;
     }
 
     if (outputTemplateForPreview === 'canshou') {
       const safe = normalizeCanshouForCard(outputDataCard);
       const parts = [safe.appearance, safe.materialAndSkin, safe.featuresAndAppendages].filter((item) => typeof item === 'string' && item.trim());
-      return `${parts.join(', ')}, Xiabanmo, 二次元`;
+      return `${parts.join(', ')}, 二次元`;
     }
 
     const record = isRecord(outputDataCard) ? outputDataCard : {};
     const name = ensureString(record.name).trim();
     const content = ensureString(record.content).trim();
     const head = content.length > 800 ? content.slice(0, 800) : content;
-    return `${name ? `${name}, ` : ''}${head}, Xiabanmo, 二次元, 角色立绘`;
+    return `${name ? `${name}, ` : ''}${head}, 二次元, 角色立绘`;
   }, [outputDataCard, outputTemplateForPreview]);
 
   const outputJsonPayload = useMemo(() => {
