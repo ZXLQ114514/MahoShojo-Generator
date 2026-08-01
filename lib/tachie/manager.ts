@@ -2,7 +2,7 @@ import { generateText2Image, getGenerateStatus, calculateProgress } from "./libl
 import { getStatusDescription, GenerateStatus } from "./liblib/types";
 import { generateModelScopeText2Image, getModelScopeTaskStatus } from "./modelscope/api";
 
-export type TachieSource = "liblib" | "modelscope";
+export type TachieSource = "liblib" | "modelscope" | "xemapi";
 export type TachieGenerateMode = 'tachie' | 'illustration';
 
 export interface TachieGenerationRequest {
@@ -12,6 +12,8 @@ export interface TachieGenerationRequest {
     modelscopeToken?: string;
     modelscopeModel?: string;
     modelscopeSize?: string;
+    xemapiApiKey?: string;
+    imageGenerationLicenseKey?: string;
     prompt: string;
     mode?: TachieGenerateMode;
     workflowUuid?: string;
@@ -60,6 +62,31 @@ export const generateTachieWithProgress = async (
 ): Promise<TachieGenerationResult> => {
     try {
         switch (request.source) {
+            case "xemapi": {
+                const credential = request.xemapiApiKey?.trim() || request.imageGenerationLicenseKey?.trim();
+                if (!credential) throw new Error("请填写 XemAPI API Key 或图片生成许可密钥");
+                onProgress?.(10, "正在提交 XemAPI 图片生成任务...");
+                const response = await fetch("/api/tachie/generate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        source: "xemapi",
+                        prompt: request.prompt,
+                        credentialType: request.xemapiApiKey?.trim() ? "apiKey" : "licenseKey",
+                        credential,
+                    }),
+                });
+                const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+                if (!response.ok) {
+                    const message = payload && typeof payload.error === "string" ? payload.error : "XemAPI 图片生成失败";
+                    throw new Error(message);
+                }
+                const data = payload?.data && typeof payload.data === "object" ? payload.data as Record<string, unknown> : null;
+                const imageUrl = data && typeof data.imageUrl === "string" ? data.imageUrl : "";
+                if (!imageUrl) throw new Error("XemAPI 返回结果中没有图片");
+                onProgress?.(100, "生成完成！");
+                return { success: true, imageUrl, generateUuid: typeof data?.generateUuid === "string" ? data.generateUuid : undefined, percentCompleted: 100 };
+            }
             case "liblib": {
                 const accessKey = request.accessKey?.trim();
                 const secretKey = request.secretKey?.trim();

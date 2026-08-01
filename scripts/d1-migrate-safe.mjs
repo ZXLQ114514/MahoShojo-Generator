@@ -124,7 +124,12 @@ const executeSql = (options, sql) => {
   mkdirSync(xdgConfigHome, { recursive: true });
 
   const commandArgs = buildWranglerCommandArgs(options, sql);
-  const result = spawnSync('npx', commandArgs, {
+  const isWindows = process.platform === 'win32';
+  const executable = isWindows ? process.execPath : 'npx';
+  const spawnArgs = isWindows
+    ? [resolve(process.cwd(), 'node_modules/wrangler/bin/wrangler.js'), ...commandArgs.slice(2)]
+    : commandArgs;
+  const result = spawnSync(executable, spawnArgs, {
     encoding: 'utf8',
     env: {
       ...process.env,

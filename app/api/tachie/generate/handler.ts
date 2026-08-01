@@ -12,6 +12,10 @@ import {
   normalizeModelScopeToken,
   parseModelScopeJsonSafe,
 } from "@/lib/tachie/modelscope/error";
+import { generateXemApiImage } from "@/lib/tachie/xemapi/provider";
+import { getDrizzleDbFromRuntime } from '@/lib/db/drizzle';
+import { consumeImageGenerationLicense } from '@/lib/db/repositories/image-generation-licenses';
+import { hashImageGenerationLicenseKey } from '@/lib/tachie/license';
 
 async function handler(req: Request) {
   if (req.method !== "POST") {
@@ -68,6 +72,60 @@ async function handler(req: Request) {
       : {};
 
     const sourceRaw = typeof payload.source === "string" ? payload.source.trim().toLowerCase() : "";
+    if (sourceRaw === "xemapi") {
+      const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
+      if (!prompt) {
+        return new Response(JSON.stringify({ error: '缺少提示词：prompt 不能为空' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const credentialType = payload.credentialType === 'licenseKey' ? 'licenseKey' : 'apiKey';
+      const credential = typeof payload.credential === 'string' ? payload.credential.trim() : '';
+      if (!credential) return new Response(JSON.stringify({ error: '缺少 XemAPI API Key 或图片生成许可密钥' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+
+      let apiKey = '';
+      if (credentialType === 'licenseKey') {
+        apiKey = process.env.XEMAPI_IMAGE_API_KEY?.trim() ?? '';
+        if (!apiKey) return new Response(JSON.stringify({ error: '服务端图片生成配置不完整' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        const db = getDrizzleDbFromRuntime();
+        if (!db) return new Response(JSON.stringify({ error: '图片许可服务暂不可用' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        const consumed = await consumeImageGenerationLicense(db, await hashImageGenerationLicenseKey(credential));
+        if (!consumed) return new Response(JSON.stringify({ error: '图片生成许可密钥无效、已过期或次数已用尽' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+      } else {
+        apiKey = credential;
+      }
+
+      const result = await generateXemApiImage({
+        prompt,
+        apiKey,
+        size: payload.size === '1536x1024' || payload.size === '1024x1536' || payload.size === '1024x1024'
+          ? payload.size
+          : undefined,
+        quality: payload.quality === 'low' || payload.quality === 'medium' || payload.quality === 'high' || payload.quality === 'standard'
+          ? payload.quality
+          : undefined,
+        style: payload.style === 'natural' || payload.style === 'vivid' ? payload.style : undefined,
+        n: typeof payload.n === 'number' ? payload.n : undefined,
+        responseFormat: payload.response_format === 'b64_json' ? 'b64_json' : 'url',
+      });
+
+      return new Response(JSON.stringify({
+        code: 0,
+        msg: 'success',
+        data: {
+          generateUuid: result.taskId,
+          imageUrl: result.imageUrls[0] ?? null,
+          imageUrls: result.imageUrls,
+          provider: result.providerName,
+          model: result.model,
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     const source = sourceRaw === "modelscope" ? "modelscope" : "liblib";
 
     if (source === "modelscope") {
