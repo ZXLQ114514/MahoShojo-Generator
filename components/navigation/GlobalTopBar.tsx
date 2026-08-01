@@ -123,7 +123,7 @@ export function GlobalTopBar({ pathname, defaultMobileOpen = false }: GlobalTopB
                     aria-expanded={isOpen}
                     className={
                       active
-                        ? 'h-9 rounded-full bg-pink-600 px-4 text-sm font-semibold text-white shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-200'
+                        ? 'global-topbar-nav-trigger-active h-9 rounded-full bg-pink-600 px-4 text-sm font-semibold text-white shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-200'
                         : 'global-topbar-nav-trigger h-9 rounded-full px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-200'
                     }
                   >

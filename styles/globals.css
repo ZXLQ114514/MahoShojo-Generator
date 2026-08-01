@@ -315,12 +315,40 @@ body {
 
 .global-topbar-logo-link {
   color: #111827;
+  flex: 0 0 auto;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.global-topbar-logo-link > img {
+  max-width: none;
+}
+
+.global-topbar nav {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.global-topbar button,
+.global-topbar-nav-trigger,
+.global-topbar-nav-trigger-active {
+  max-width: none;
+  white-space: nowrap;
+}
+
+.global-topbar-nav-trigger-active {
+  background: #db2777;
+  color: #ffffff;
 }
 
 .global-topbar-logo-link:hover,
 .global-topbar-nav-trigger:hover,
 .global-topbar-mobile-button:hover {
   background: rgba(255, 255, 255, 0.75);
+}
+
+.global-topbar-nav-trigger-active:hover {
+  background: #be185d;
 }
 
 .global-topbar-nav-trigger {
@@ -362,6 +390,11 @@ body {
 :root[data-color-mode='dark'] .global-topbar-logo-link,
 :root[data-color-mode='dark'] .global-topbar-nav-trigger {
   color: #f1f5f9;
+}
+
+:root[data-color-mode='dark'] .global-topbar-nav-trigger-active {
+  background: #db2777;
+  color: #ffffff;
 }
 
 :root[data-color-mode='dark'] .global-topbar-logo-link:hover,
