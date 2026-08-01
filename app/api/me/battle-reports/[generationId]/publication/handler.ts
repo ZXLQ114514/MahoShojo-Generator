@@ -66,6 +66,7 @@ export async function appRouteHandler(req: Request): Promise<Response> {
     const output = await loadBattleReportGenerationOutputText({
       generationId: record.id,
       outputPreview: record.output_preview,
+      outputChars: record.output_chars,
     });
     const outputText = output.outputText?.trim() ?? '';
     if (!outputText || output.readError) return json({ error: '战报正文尚未保存完整，暂时不能公开' }, { status: 422 });

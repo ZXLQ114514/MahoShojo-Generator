@@ -44,6 +44,7 @@ async function handler(req: Request): Promise<Response> {
   const output = await loadBattleReportGenerationOutputText({
     generationId: record.id,
     outputPreview: record.output_preview,
+    outputChars: record.output_chars,
   });
   const outputPreview = output.outputText;
   if (!outputPreview.trim()) {

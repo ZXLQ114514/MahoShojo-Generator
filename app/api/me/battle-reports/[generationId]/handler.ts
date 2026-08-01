@@ -55,7 +55,11 @@ async function handler(req: Request): Promise<Response> {
     if (typeof body.note !== 'string') return json({ error: 'note 必须是字符串' }, { status: 400 });
     const note = body.note.trim().slice(0, 500) || null;
     if (record.is_public === 1) {
-      const output = await loadBattleReportGenerationOutputText({ generationId: record.id, outputPreview: record.output_preview });
+      const output = await loadBattleReportGenerationOutputText({
+        generationId: record.id,
+        outputPreview: record.output_preview,
+        outputChars: record.output_chars,
+      });
       const combined = `${note ?? ''}\n${output.outputText ?? ''}`;
       if (applyShieldWords(combined).hasShieldWords) return json({ error: '公开备注或战报正文包含屏蔽词，不能保存' }, { status: 422 });
       if ((await quickCheck(combined)).hasSensitiveWords) return json({ error: '公开备注或战报正文包含敏感内容，不能保存' }, { status: 422 });
@@ -82,6 +86,7 @@ async function handler(req: Request): Promise<Response> {
   const output = await loadBattleReportGenerationOutputText({
     generationId: record.id,
     outputPreview: record.output_preview,
+    outputChars: record.output_chars,
   });
   const outputPreview = output.outputText || null;
   const hasPreviewText = Boolean(outputPreview && outputPreview.trim());

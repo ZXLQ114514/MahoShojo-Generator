@@ -114,6 +114,7 @@ export type BattleReportGenerationRowLite = {
   headline: string | null;
   winner: string | null;
   note: string | null;
+  output_chars: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
   total_tokens: number | null;
@@ -218,6 +219,7 @@ const mapLiteRow = (row: {
   headline: string | null;
   winner: string | null;
   note: string | null;
+  outputChars: number | null;
   promptTokens: number | null;
   completionTokens: number | null;
   totalTokens: number | null;
@@ -255,6 +257,7 @@ const mapLiteRow = (row: {
   headline: row.headline,
   winner: row.winner,
   note: row.note,
+  output_chars: toIntOrNull(row.outputChars),
   prompt_tokens: toIntOrNull(row.promptTokens),
   completion_tokens: toIntOrNull(row.completionTokens),
   total_tokens: toIntOrNull(row.totalTokens),
@@ -399,6 +402,7 @@ export const getBattleReportGenerationByIdLite = async (
       headline: battleReportGenerations.headline,
       winner: battleReportGenerations.winner,
       note: battleReportGenerations.note,
+      outputChars: battleReportGenerations.outputChars,
       promptTokens: battleReportGenerations.promptTokens,
       completionTokens: battleReportGenerations.completionTokens,
       totalTokens: battleReportGenerations.totalTokens,
@@ -459,6 +463,7 @@ export const listBattleReportGenerationsByUserIdLite = async (
       headline: battleReportGenerations.headline,
       winner: battleReportGenerations.winner,
       note: battleReportGenerations.note,
+      outputChars: battleReportGenerations.outputChars,
       promptTokens: battleReportGenerations.promptTokens,
       completionTokens: battleReportGenerations.completionTokens,
       totalTokens: battleReportGenerations.totalTokens,
@@ -668,6 +673,7 @@ export const listPublicBattleReportGenerationsLite = async (
       headline: battleReportGenerations.headline,
       winner: battleReportGenerations.winner,
       note: battleReportGenerations.note,
+      outputChars: battleReportGenerations.outputChars,
       promptTokens: battleReportGenerations.promptTokens,
       completionTokens: battleReportGenerations.completionTokens,
       totalTokens: battleReportGenerations.totalTokens,

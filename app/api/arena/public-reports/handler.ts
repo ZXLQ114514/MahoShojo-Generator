@@ -32,7 +32,11 @@ const isArenaRecord = (endpoint: string, pvpMatchId?: string | null): boolean =>
 
 const readSafeOutput = async (record: Awaited<ReturnType<typeof getBattleReportGenerationByIdLite>>) => {
   if (!record || record.status !== 'completed' || record.is_public !== 1 || !isArenaRecord(record.endpoint, record.pvp_match_id)) return null;
-  const output = await loadBattleReportGenerationOutputText({ generationId: record.id, outputPreview: record.output_preview });
+  const output = await loadBattleReportGenerationOutputText({
+    generationId: record.id,
+    outputPreview: record.output_preview,
+    outputChars: record.output_chars,
+  });
   const text = output.outputText?.trim() ?? '';
   if (!text || output.readError) return null;
   if (record.output_has_shield_words === 1) return null;

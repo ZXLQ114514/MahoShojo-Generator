@@ -105,6 +105,7 @@ export interface BattleReportGenerationRowLite {
   headline: string | null;
   winner: string | null;
   note: string | null;
+  output_chars: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
   total_tokens: number | null;

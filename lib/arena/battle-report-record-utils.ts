@@ -57,9 +57,33 @@ export function buildBattleReportGenerationCombatantInserts(
   });
 }
 
+const isJsonLike = (value: string): boolean => /^\s*[\[{]/.test(value);
+
+const isInvalidJsonPreview = (value: string): boolean => {
+  if (!isJsonLike(value)) return false;
+  try {
+    JSON.parse(value);
+    return false;
+  } catch {
+    return true;
+  }
+};
+
+export function isLikelyIncompleteBattleReportOutputPreview(input: {
+  outputPreview: string;
+  outputChars?: number | null;
+}): boolean {
+  const preview = input.outputPreview.trim();
+  if (!preview) return true;
+  if (typeof input.outputChars === 'number' && input.outputChars > preview.length) return true;
+  if (preview.includes('……')) return true;
+  return isInvalidJsonPreview(preview);
+}
+
 export async function loadBattleReportGenerationOutputText(input: {
   generationId: string;
   outputPreview: string | null | undefined;
+  outputChars?: number | null;
 }): Promise<{
   outputText: string;
   source: 'd1' | 'r2' | 'none';
@@ -67,7 +91,11 @@ export async function loadBattleReportGenerationOutputText(input: {
   readError: string | null;
 }> {
   const preview = typeof input.outputPreview === 'string' ? input.outputPreview : '';
-  if (preview.trim()) {
+  const shouldTryR2 = isLikelyIncompleteBattleReportOutputPreview({
+    outputPreview: preview,
+    outputChars: input.outputChars,
+  });
+  if (!shouldTryR2 && preview.trim()) {
     return {
       outputText: preview,
       source: 'd1',
@@ -92,6 +120,15 @@ export async function loadBattleReportGenerationOutputText(input: {
     return {
       outputText: r2.data.text,
       source: 'r2',
+      hasStoredOutput: true,
+      readError: null,
+    };
+  }
+
+  if (preview.trim()) {
+    return {
+      outputText: preview,
+      source: 'd1',
       hasStoredOutput: true,
       readError: null,
     };
