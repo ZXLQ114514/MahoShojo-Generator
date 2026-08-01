@@ -76,22 +76,44 @@ body {
 }
 
 .container {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 20px;
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding: clamp(16px, 2vw, 32px);
+  min-width: 0;
   position: relative;
   z-index: 1;
 }
 
 .card {
+  width: 100%;
+  min-width: 0;
   background: var(--app-surface);
   border-radius: 20px;
   padding: 30px;
   box-shadow: var(--app-card-shadow);
   backdrop-filter: blur(10px);
   border: 1px solid var(--app-border);
-  max-width: 500px;
   color: var(--app-text);
+}
+
+img,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+pre,
+code {
+  overflow-wrap: anywhere;
 }
 
 @layer components {
