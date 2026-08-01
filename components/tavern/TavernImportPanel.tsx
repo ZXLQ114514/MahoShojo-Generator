@@ -43,6 +43,7 @@ import { buildTavernScenarioFragment } from '@/lib/tavern-card/scenario';
 import type { CanshouData, GeneralCharacterData, GeneralScenarioData, MagicalGirlData, ScenarioData } from '@/lib/schemas';
 import type { AIReasoningEnvelope } from '@/types/ai-reasoning';
 import { useAuth } from '@/lib/useAuth';
+import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
 
 import { TavernCardPreview } from './TavernCardPreview';
 
@@ -994,7 +995,7 @@ export function TavernImportPanel() {
     if (outputTemplateForPreview === 'magical-girl') {
       const record = isRecord(outputDataCard) ? outputDataCard : {};
       const appearance = isRecord(record.appearance) ? record.appearance : {};
-      return `${JSON.stringify(appearance)}, 二次元, 魔法少女`;
+      return `${formatImagePromptAppearance(appearance)}，二次元，魔法少女`;
     }
 
     if (outputTemplateForPreview === 'canshou') {

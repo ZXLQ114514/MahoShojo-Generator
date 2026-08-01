@@ -21,6 +21,7 @@ import { mapDataCardSourceMeta, mapPublicDataCardRowToBattleSelectionPayload } f
 import { COLOR_GRADIENTS, MainColor } from '@/lib/main-color';
 import { inferTemplate, TEMPLATE_LABELS, type InferableTemplate } from '@/lib/data-card-converter';
 import { mergeTeamDataCards, type TeamMergeOutputTemplate } from '@/lib/team/merge-team-cards';
+import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
 
 type Notice = { type: 'success' | 'error' | 'info'; text: string } | null;
@@ -108,9 +109,7 @@ const buildTachiePrompt = (data: Record<string, unknown>): string => {
 
   if (isMagicalGirl && isPlainObject(data.appearance)) {
     const appearance = data.appearance as Record<string, unknown>;
-    const appearanceString = Object.entries(appearance)
-      .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
-      .join(', ');
+    const appearanceString = formatImagePromptAppearance(appearance);
     return `${appearanceString}, 二次元, 魔法少女`;
   }
 

@@ -32,6 +32,7 @@ import { readJsonOrTextFromResponse, resolveApiErrorMessage } from '@/lib/client
 import { AI_META_REQUEST_HEADER, AI_META_REQUEST_VALUE, readJsonWithAiMeta } from '@/lib/client/read-json-with-ai-meta';
 import { formatHttpErrorMessage } from '@/lib/client/httpError';
 import { authStorage } from '@/lib/auth';
+import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
 import { STREAM_ABORT_REASON_USER } from '@/lib/stream/abort';
 import type { AIReasoningEnvelope } from '@/types/ai-reasoning';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
@@ -814,7 +815,7 @@ export function FreePage() {
             <div className="text-center">
               <h3 className="text-lg font-medium text-blue-900 mb-4">生成立绘</h3>
               <CharacterPortraitAssetPanel
-                prompt={`${JSON.stringify(safe.appearance)} , 二次元, 魔法少女`}
+                prompt={`${formatImagePromptAppearance(safe.appearance)}，二次元，魔法少女`}
                 onPortraitAssetChange={setCharacterPortraitAsset}
               />
             </div>

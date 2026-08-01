@@ -31,6 +31,7 @@ import { useAuth } from '@/lib/useAuth';
 import { dataCardApi, authStorage } from '@/lib/auth';
 import { loadAuthMigrationStatus, type AuthMigrationStatus } from '@/components/me/authMigrationStatus';
 import { getDataCardVisibilityValue } from '@/lib/data-card-status';
+import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
 
 // 引入 AdjudicatorEditor 和新类型
 import AdjudicatorEditor from '@/components/AdjudicatorEditor';
@@ -1008,9 +1009,7 @@ export const CharacterManagerPage: React.FC = () => {
         if (currentTemplate === 'magical-girl') {
             const appearance = characterData.appearance;
             if (appearance && typeof appearance === 'object' && !Array.isArray(appearance)) {
-                const appearanceString = Object.entries(appearance)
-                    .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
-                    .join(', ');
+                const appearanceString = formatImagePromptAppearance(appearance);
                 newPrompt = `${appearanceString}, 二次元, 魔法少女`;
             }
         } else if (currentTemplate === 'canshou') {

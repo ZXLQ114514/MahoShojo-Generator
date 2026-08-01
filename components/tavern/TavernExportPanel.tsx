@@ -17,6 +17,7 @@ import { useAppRouterAdapter } from '@/lib/app-router-adapter';
 import { inferTemplate, type InferableTemplate } from '@/lib/data-card-converter';
 import { mapDataCardRuntimeSourceInfo, mapPublicDataCardRowToBattleSelectionPayload } from '@/lib/data-card-read-mappers';
 import { computeTechIndex } from '@/lib/metrics/techIndex';
+import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
 import {
   buildArenaDefaultScenario,
   buildArenaWorldbook,
@@ -855,7 +856,7 @@ export function TavernExportPanel() {
 
     if (state.template === 'magical-girl') {
       const appearance = isRecord(record['appearance']) ? record['appearance'] : {};
-      return `${JSON.stringify(appearance)}, 二次元, 魔法少女`;
+      return `${formatImagePromptAppearance(appearance)}，二次元，魔法少女`;
     }
 
     if (state.template === 'canshou') {
