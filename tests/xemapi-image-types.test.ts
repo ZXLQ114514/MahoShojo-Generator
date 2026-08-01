@@ -4,6 +4,7 @@ import { isXemApiImageModel, parseXemApiImageResponse } from '@/lib/tachie/xemap
 import {
   buildXemApiImageRequest,
   generateXemApiImage,
+  getXemApiImageErrorMessage,
   resolveXemApiImageProvider,
 } from '@/lib/tachie/xemapi/provider';
 
@@ -38,6 +39,12 @@ describe('XemAPI image response parsing', () => {
     expect(parseXemApiImageResponse(null)).toEqual({ imageUrls: [] });
     expect(isXemApiImageModel('gpt-image-2')).toBe(true);
     expect(isXemApiImageModel('gpt-image-1')).toBe(false);
+  });
+
+  test('为图片权限或上游不可用返回可操作的安全提示', () => {
+    expect(getXemApiImageErrorMessage(503)).toContain('gpt-image-2 图片权限');
+    expect(getXemApiImageErrorMessage(503)).not.toContain('Bearer');
+    expect(getXemApiImageErrorMessage(500)).toBe('XemAPI 图片生成失败（HTTP 500）');
   });
 
   test('优先选择 XemAPI_default，且不会把密钥放进请求体', async () => {

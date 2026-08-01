@@ -78,6 +78,13 @@ const readJson = async (response: Response): Promise<unknown> => {
 const getImageGenerationUrl = (baseUrl: string): string =>
   `${baseUrl.trim().replace(/\/+$/, '')}/images/generations`;
 
+export const getXemApiImageErrorMessage = (status: number): string => {
+  if (status === 401 || status === 403 || status === 503) {
+    return `当前 API Key 未开通 gpt-image-2 图片权限，或 XemAPI 图片服务暂时不可用（HTTP ${status}）。请使用 XemAPI 的 gpt-image 图片分组 Key。`;
+  }
+  return `XemAPI 图片生成失败（HTTP ${status}）`;
+};
+
 /**
  * 服务端调用 XemAPI 的 gpt-image-2。
  * 图片生成不自动重试，避免一次用户操作产生重复计费任务。
@@ -101,7 +108,7 @@ export const generateXemApiImage = async (
   const payload = await readJson(response);
 
   if (!response.ok) {
-    throw new Error(`XemAPI 图片生成失败（HTTP ${response.status}）`);
+    throw new Error(getXemApiImageErrorMessage(response.status));
   }
 
   const result = parseXemApiImageResponse(payload);

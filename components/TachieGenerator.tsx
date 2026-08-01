@@ -371,8 +371,9 @@ export default function TachieGenerator({
                 </select>
               </div>
               <div className="input-group">
-                <label htmlFor="xemapiCredential" className="input-label">{xemapiCredentialType === 'apiKey' ? 'XemAPI API Key' : '图片生成许可密钥'}</label>
-                <input id="xemapiCredential" type="password" value={xemapiCredential} onChange={(e) => setXemapiCredential(e.target.value)} placeholder={xemapiCredentialType === 'apiKey' ? '仅本次请求使用，不会保存' : '输入管理员生成的许可密钥'} className="input-field" disabled={isGenerating} />
+                <label htmlFor="xemapiCredential" className="input-label">{xemapiCredentialType === 'apiKey' ? 'XemAPI 图片分组 API Key' : '图片生成许可密钥'}</label>
+                <input id="xemapiCredential" type="password" value={xemapiCredential} onChange={(e) => setXemapiCredential(e.target.value)} placeholder={xemapiCredentialType === 'apiKey' ? '需开通 gpt-image-2 权限，仅本次请求使用' : '输入管理员生成的许可密钥'} className="input-field" disabled={isGenerating} />
+                {xemapiCredentialType === 'apiKey' ? <p className="mt-1 text-xs text-gray-500">普通文本供应商 Key 无法调用图片接口，请使用 XemAPI 的 gpt-image 图片分组 Key。</p> : null}
               </div>
             </>
           )}
