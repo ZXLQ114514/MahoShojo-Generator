@@ -31,6 +31,58 @@ const normalizeValue = (value: unknown): string => {
   return '';
 };
 
+const PORTRAIT_PROMPT_MAX_DESCRIPTION_CHARS = 420;
+
+const normalizePromptText = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const truncatePromptText = (value: string, maxChars: number): string => {
+  const chars = Array.from(value);
+  return chars.length > maxChars ? `${chars.slice(0, maxChars).join('')}…` : value;
+};
+
+export type CharacterPortraitPromptInput = {
+  appearance?: unknown;
+  description?: unknown;
+  characterType?: 'magical-girl' | 'canshou' | 'general';
+};
+
+/**
+ * 统一构造角色立绘提示词。
+ * 角色卡正文只能作为外观参考，不能让模型把它当成海报/角色档案的版式指令。
+ */
+export const buildCharacterPortraitPrompt = ({
+  appearance,
+  description,
+  characterType = 'general',
+}: CharacterPortraitPromptInput): string => {
+  const appearanceText = formatImagePromptAppearance(appearance);
+  const descriptionText = truncatePromptText(normalizePromptText(description), PORTRAIT_PROMPT_MAX_DESCRIPTION_CHARS);
+  const subject = characterType === 'magical-girl'
+    ? '二次元魔法少女角色'
+    : characterType === 'canshou'
+      ? '二次元奇幻生物角色'
+      : '二次元角色';
+
+  return [
+    `主体：${subject}`,
+    appearanceText ? `外观参考：${appearanceText}` : '',
+    descriptionText ? `外观与气质参考：${descriptionText}` : '',
+    '构图：单人，完整身体，从头到脚，角色居中，清晰展示服装和外观，纯角色插画，干净简单背景。',
+    '硬性禁止：角色档案，人物设定表，海报，信息图，UI，分栏，边框，标题，姓名，说明文字，字幕，数字，字母，Logo，水印，小头像，角色卡，漫画分格。',
+    '输出：只生成一张没有任何可读文字的插画画面。',
+  ].filter(Boolean).join('\n');
+};
+
 /** 将角色外观对象转换为图片模型更容易理解的自然语言。 */
 export const formatImagePromptAppearance = (value: unknown): string => {
   if (typeof value === 'string') return value.replace(/\s+/g, ' ').trim();

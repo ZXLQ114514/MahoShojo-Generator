@@ -32,7 +32,7 @@ import { readJsonOrTextFromResponse, resolveApiErrorMessage } from '@/lib/client
 import { AI_META_REQUEST_HEADER, AI_META_REQUEST_VALUE, readJsonWithAiMeta } from '@/lib/client/read-json-with-ai-meta';
 import { formatHttpErrorMessage } from '@/lib/client/httpError';
 import { authStorage } from '@/lib/auth';
-import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 import { STREAM_ABORT_REASON_USER } from '@/lib/stream/abort';
 import type { AIReasoningEnvelope } from '@/types/ai-reasoning';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
@@ -181,18 +181,15 @@ const normalizeCanshouForCard = (input: unknown): any => {
 };
 
 const buildGeneralPortraitPrompt = (name: string, content: string): string => {
-  const normalizedName = typeof name === 'string' ? name.trim() : '';
-  const normalizedContent = typeof content === 'string' ? content.trim() : '';
-  const head = normalizedContent.length > 800 ? normalizedContent.slice(0, 800) : normalizedContent;
-  const prefix = [normalizedName, head].filter(Boolean).join(', ');
-  return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
+  void name;
+  return buildCharacterPortraitPrompt({ description: content, characterType: 'general' });
 };
 
 const buildCanshouPortraitPrompt = (input: Record<string, unknown>): string => {
-  const parts = [input.appearance, input.materialAndSkin, input.featuresAndAppendages]
-    .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter(Boolean);
-  return parts.join(', ');
+  return buildCharacterPortraitPrompt({
+    appearance: [input.appearance, input.materialAndSkin, input.featuresAndAppendages].filter(Boolean).join('，'),
+    characterType: 'canshou',
+  });
 };
 
 const buildFieldGuideForUi = (schemaId: FreeSchemaId): string => {
@@ -818,7 +815,7 @@ export function FreePage() {
             <div className="text-center">
               <h3 className="text-lg font-medium text-blue-900 mb-4">生成立绘</h3>
               <CharacterPortraitAssetPanel
-                prompt={`${formatImagePromptAppearance(safe.appearance)}，二次元，魔法少女`}
+                prompt={buildCharacterPortraitPrompt({ appearance: safe.appearance, characterType: 'magical-girl' })}
                 initialAsset={readCharacterPortraitAsset(safe)}
                 onPortraitAssetChange={setCharacterPortraitAsset}
               />

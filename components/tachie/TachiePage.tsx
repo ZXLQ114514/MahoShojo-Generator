@@ -1,6 +1,7 @@
 'use client';
 
 import TachieGenerator from '@/components/TachieGenerator';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 import { useEffect, useState } from 'react';
 
 import type { BetaAccessFeatureId } from '@/config/beta-access';
@@ -68,7 +69,7 @@ export function TachiePage() {
             }}
           />
         </div>
-        <TachieGenerator prompt={`${prompt}, 二次元, 魔法少女`} />
+        <TachieGenerator prompt={buildCharacterPortraitPrompt({ description: prompt, characterType: 'magical-girl' })} />
 
         <div className="mt-12 text-center">
           <p className="text-sm text-gray-600">

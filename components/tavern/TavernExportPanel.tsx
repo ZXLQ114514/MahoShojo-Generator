@@ -17,7 +17,7 @@ import { useAppRouterAdapter } from '@/lib/app-router-adapter';
 import { inferTemplate, type InferableTemplate } from '@/lib/data-card-converter';
 import { mapDataCardRuntimeSourceInfo, mapPublicDataCardRowToBattleSelectionPayload } from '@/lib/data-card-read-mappers';
 import { computeTechIndex } from '@/lib/metrics/techIndex';
-import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 import {
   buildArenaDefaultScenario,
   buildArenaWorldbook,
@@ -856,7 +856,7 @@ export function TavernExportPanel() {
 
     if (state.template === 'magical-girl') {
       const appearance = isRecord(record['appearance']) ? record['appearance'] : {};
-      return `${formatImagePromptAppearance(appearance)}，二次元，魔法少女`;
+      return buildCharacterPortraitPrompt({ appearance, characterType: 'magical-girl' });
     }
 
     if (state.template === 'canshou') {
@@ -864,13 +864,13 @@ export function TavernExportPanel() {
       const materialAndSkin = safeString(record['materialAndSkin']);
       const featuresAndAppendages = safeString(record['featuresAndAppendages']);
       const parts = [appearance, materialAndSkin, featuresAndAppendages].map((item) => item.trim()).filter(Boolean);
-      return `${parts.join(', ')}, 二次元`;
+      return buildCharacterPortraitPrompt({ appearance: parts.join('，'), characterType: 'canshou' });
     }
 
     const name = safeString(record['name']).trim();
     const content = safeString(record['content']).trim();
-    const head = content.length > 800 ? content.slice(0, 800) : content;
-    return `${name ? `${name}, ` : ''}${head}, 二次元, 角色立绘`;
+    void name;
+    return buildCharacterPortraitPrompt({ description: content, characterType: 'general' });
   }, [state.dataCard, state.template]);
 
   const tachiePromptKey = useMemo(() => {

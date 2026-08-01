@@ -55,7 +55,7 @@ import { AI_META_REQUEST_HEADER, AI_META_REQUEST_VALUE, readJsonWithAiMeta } fro
 import { formatHttpErrorMessage } from '@/lib/client/httpError';
 import { getAnswerLimitInfo, isAnswerOverLimit, QUESTIONNAIRE_NATIVE_MAX_ANSWER_CHARS } from '@/lib/questionnaire-limits';
 import { authStorage } from '@/lib/auth';
-import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
+import { buildCharacterPortraitPrompt } from '@/lib/tachie/prompt-utils';
 import { buildCustomProviderRequestPayload } from '@/lib/ai/custom-provider';
 import { mapDataCardSourceMeta } from '@/lib/data-card-read-mappers';
 import {
@@ -509,9 +509,8 @@ export const DetailsPage: React.FC = () => {
     if (generationMode !== 'stream') return '';
     const name = typeof streamedGeneralCardForDisplay?.name === 'string' ? streamedGeneralCardForDisplay.name.trim() : '';
     const contentRaw = (streamingMarkdown ?? streamedGeneralCard?.content ?? '').trim();
-    const contentHead = contentRaw.length > 800 ? contentRaw.slice(0, 800) : contentRaw;
-    const prefix = [name, contentHead].filter(Boolean).join(', ');
-    return `${prefix ? `${prefix}, ` : ''}二次元, 角色立绘`;
+    void name;
+    return buildCharacterPortraitPrompt({ description: contentRaw, characterType: 'general' });
   }, [generationMode, streamedGeneralCardForDisplay, streamingMarkdown, streamedGeneralCard]);
 
   useEffect(() => {
@@ -2621,7 +2620,7 @@ export const DetailsPage: React.FC = () => {
                 <div className="text-center">
                   <h3 className="text-lg font-medium text-blue-900" style={{ marginBottom: '1rem' }}>生成立绘</h3>
                   <CharacterPortraitAssetPanel
-                    prompt={`${formatImagePromptAppearance(magicalGirlDetails.appearance)}，二次元，魔法少女`}
+                    prompt={buildCharacterPortraitPrompt({ appearance: magicalGirlDetails.appearance, characterType: 'magical-girl' })}
                     initialAsset={readCharacterPortraitAsset(resolvedResultPayload)}
                     onPortraitAssetChange={setCharacterPortraitAsset}
                   />
