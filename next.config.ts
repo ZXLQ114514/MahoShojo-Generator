@@ -3,9 +3,10 @@ import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 import { buildStaticBrowserSecurityHeaders } from "./lib/security/browser-headers";
+import { isLocalRuntime } from "./lib/runtime-mode";
 
 const createNextConfig = (phase: string): NextConfig => {
-  if (phase === PHASE_DEVELOPMENT_SERVER) {
+  if (phase === PHASE_DEVELOPMENT_SERVER && !isLocalRuntime()) {
     initOpenNextCloudflareForDev();
   }
 

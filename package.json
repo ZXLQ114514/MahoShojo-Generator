@@ -5,6 +5,7 @@
     "packageManager": "pnpm@11.3.0",
     "scripts": {
         "dev": "next dev --turbopack",
+        "dev:local": "node scripts/start-local-dev.mjs",
         "dev:pretty": "bash -lc 'if command -v pino-pretty >/dev/null 2>&1; then next dev --turbopack | pino-pretty; else echo \"[dev:pretty] pino-pretty 未安装，回退到原始日志输出\" >&2; next dev --turbopack; fi'",
         "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
         "build": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\" && next build",
@@ -56,6 +57,7 @@
         "micromark-extension-math": "^3.1.0",
         "next": "15.3.8",
         "pino": "^9.7.0",
+        "pg": "^8.16.3",
         "pinyin-pro": "^3.27.0",
         "react": "^19.2.1",
         "react-dom": "^19.2.1",
@@ -79,6 +81,7 @@
         "@tailwindcss/postcss": "^4",
         "@types/better-sqlite3": "^7.6.13",
         "@types/node": "^20",
+        "@types/pg": "^8.15.5",
         "@types/react": "^19",
         "@types/react-dom": "^19",
         "@typescript-eslint/typescript-estree": "^8.43.0",

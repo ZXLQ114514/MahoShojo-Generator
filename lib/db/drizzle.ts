@@ -3,6 +3,8 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
 import * as schema from '@/lib/db/schema';
 import { createHttpD1ClientFromEnv } from '@/lib/db/d1-http-client';
+import { isLocalRuntime } from '@/lib/runtime-mode';
+import { createLocalPostgresD1Client } from '@/lib/db/local-postgres-d1-client';
 
 export type AppDrizzleDb = DrizzleD1Database<typeof schema>;
 
@@ -62,6 +64,18 @@ const readD1FromGlobal = (): DrizzleD1Client | null => {
   return candidate;
 };
 
+const readD1FromLocalPostgres = (): DrizzleD1Client | null => {
+  if (!isLocalRuntime()) return null;
+  try {
+    const candidate = createLocalPostgresD1Client();
+    if (!isD1LikeClient(candidate)) return null;
+    return candidate;
+  } catch (error) {
+    console.error('[database] 本地 PostgreSQL 初始化失败:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+};
+
 const readD1FromHttpEnv = (): DrizzleD1Client | null => {
   try {
     const candidate = createHttpD1ClientFromEnv();
@@ -81,7 +95,7 @@ type RuntimeD1ClientOptions = {
 };
 
 const getRuntimeD1ClientWithOptions = (options: RuntimeD1ClientOptions = {}): DrizzleD1Client | null => {
-  const boundClient = readD1FromCloudflareContext() ?? readD1FromGlobal();
+  const boundClient = readD1FromLocalPostgres() ?? readD1FromCloudflareContext() ?? readD1FromGlobal();
   if (boundClient) return boundClient;
   if (options.allowHttpFallback === false) return null;
   return readD1FromHttpEnv();
