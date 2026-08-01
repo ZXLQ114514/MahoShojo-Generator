@@ -62,6 +62,7 @@ import {
     writeCharacterManagerPageDraft,
 } from '@/lib/character-manager-page-draft';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
+import { readCharacterPortraitAsset, withCharacterPortraitAsset } from '@/lib/visual-asset/persistence';
 
 
 // 定义允许保持原生性的可编辑字段 (顶级键) (SRS 3.7.3)
@@ -299,6 +300,7 @@ export const CharacterManagerPage: React.FC = () => {
     const [pastedJson, setPastedJson] = useState('');
     const [characterData, setCharacterData] = useState<any | null>(null);
     const [originalData, setOriginalData] = useState<any | null>(null);
+    const [characterPortraitAsset, setCharacterPortraitAsset] = useState<CharacterCardPortraitAsset | null>(null);
 
     // 账户系统相关状态
     const [showAuthModal, setShowAuthModal] = useState(false);
@@ -568,7 +570,7 @@ export const CharacterManagerPage: React.FC = () => {
     // 统一构建可上传的数据（处理原生性签名）
     const prepareFinalDataForUpload = useCallback(async (): Promise<any | null> => {
         if (!characterData) return null;
-        let finalData = { ...characterData };
+        let finalData = withCharacterPortraitAsset({ ...characterData }, characterPortraitAsset);
 
         if (isNative && !hasLostNativeness) {
             setMessage({ type: 'info', text: '正在请求服务器进行原生性签名认证...' });
@@ -593,7 +595,7 @@ export const CharacterManagerPage: React.FC = () => {
         }
 
         return finalData;
-    }, [characterData, hasLostNativeness, isNative, router, setMessage]);
+    }, [characterData, characterPortraitAsset, hasLostNativeness, isNative, router, setMessage]);
 
     // 保存当前角色为数据卡
     const handleSaveAsDataCard = async () => {
@@ -935,7 +937,6 @@ export const CharacterManagerPage: React.FC = () => {
     // [SRS 3.3] 立绘生成器相关状态
     const [isTachieVisible, setIsTachieVisible] = useState(false);
     const [tachiePrompt, setTachiePrompt] = useState('');
-    const [characterPortraitAsset, setCharacterPortraitAsset] = useState<CharacterCardPortraitAsset | null>(null);
 
     useEffect(() => {
         const restored = readCharacterManagerPageDraft();
@@ -2603,6 +2604,7 @@ export const CharacterManagerPage: React.FC = () => {
                                 <div className="mt-4 pt-4 border-t">
                                     <CharacterPortraitAssetPanel
                                         prompt={tachiePrompt}
+                                        initialAsset={readCharacterPortraitAsset(characterData)}
                                         onPortraitAssetChange={setCharacterPortraitAsset}
                                     />
                                 </div>

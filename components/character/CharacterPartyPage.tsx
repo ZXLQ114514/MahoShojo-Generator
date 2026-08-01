@@ -23,6 +23,7 @@ import { inferTemplate, TEMPLATE_LABELS, type InferableTemplate } from '@/lib/da
 import { mergeTeamDataCards, type TeamMergeOutputTemplate } from '@/lib/team/merge-team-cards';
 import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
+import { readCharacterPortraitAsset, withCharacterPortraitAsset } from '@/lib/visual-asset/persistence';
 
 type Notice = { type: 'success' | 'error' | 'info'; text: string } | null;
 
@@ -226,7 +227,7 @@ export function CharacterPartyPage() {
   const prepareMergedDataForExport = async (): Promise<Record<string, unknown> | null> => {
     if (members.length === 0) return null;
 
-    const base = { ...mergedData };
+    const base = withCharacterPortraitAsset({ ...mergedData }, characterPortraitAsset);
     delete base.signature;
     delete base.isPreset;
 
@@ -741,7 +742,7 @@ export function CharacterPartyPage() {
                         </button>
                       ) : (
                         <SaveToCloudButton
-                          data={mergedData}
+                          data={withCharacterPortraitAsset(mergedData, characterPortraitAsset)}
                           getData={prepareMergedDataForExport}
                           cardType="character"
                           buttonText="保存到云端"
@@ -760,7 +761,7 @@ export function CharacterPartyPage() {
                     </div>
                     {members.length > 0 && (
                       <JsonSizeIndicator
-                        data={mergedData}
+                        data={withCharacterPortraitAsset(mergedData, characterPortraitAsset)}
                         warningText="⚠️ 接近云端 300KB 上限，保存/替换可能失败，请先精简数据。"
                       />
                     )}
@@ -787,6 +788,7 @@ export function CharacterPartyPage() {
                       {tachiePrompt.trim() ? (
                         <CharacterPortraitAssetPanel
                           prompt={tachiePrompt}
+                          initialAsset={readCharacterPortraitAsset(mergedData)}
                           onPortraitAssetChange={setCharacterPortraitAsset}
                         />
                       ) : (

@@ -99,6 +99,7 @@ import {
 import { buildCreatorStreamCardFromMarkdown, finalizeCreatorStreamCard } from '@/lib/creator/stream-result';
 import type { AIReasoningEnvelope } from '@/types/ai-reasoning';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
+import { readCharacterPortraitAsset, withCharacterPortraitAsset } from '@/lib/visual-asset/persistence';
 
 type QuestionnaireSelectionSource = 'preset' | 'upload' | 'database';
 
@@ -616,6 +617,11 @@ export const CreatorPage: React.FC = () => {
       userAnswers: serverAnswers.length > 0 ? serverAnswers : answerItems,
     };
   }, [magicalGirlDetails, answerItems, questionnaireItems]);
+
+  const persistedResultPayload = useMemo(
+    () => resolvedResultPayload ? withCharacterPortraitAsset(resolvedResultPayload, characterPortraitAsset) : null,
+    [resolvedResultPayload, characterPortraitAsset],
+  );
 
   const streamFallbackLabel = useMemo(() => {
     const trimmedBrief = freeformBrief.trim();
@@ -2891,18 +2897,18 @@ export const CreatorPage: React.FC = () => {
                     <div className="text-center">
                       <h3 className="text-lg font-medium text-gray-800" style={{ marginBottom: '1rem' }}>后续操作</h3>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <button onClick={() => downloadStreamedGeneralCard(streamedGeneralCard)} className="generate-button flex-1">
+                        <button onClick={() => downloadStreamedGeneralCard(withCharacterPortraitAsset(streamedGeneralCard, characterPortraitAsset))} className="generate-button flex-1">
                           {streamedGeneralCard.templateId === GENERAL_SCENARIO_TEMPLATE_ID ? '下载通用情景卡' : '下载通用角色卡'}
                         </button>
                         <SaveToCloudButton
-                          data={streamedGeneralCard}
+                          data={withCharacterPortraitAsset(streamedGeneralCard, characterPortraitAsset)}
                           cardType={streamedGeneralCard.templateId === GENERAL_SCENARIO_TEMPLATE_ID ? 'scenario' : 'character'}
                           buttonText="保存到云端"
                           className="generate-button flex-1"
                           style={{ backgroundColor: '#22c55e', backgroundImage: 'linear-gradient(to right, #22c55e, #16a34a)' }}
                         />
                         <button
-                          onClick={() => void copyStreamedGeneralCard(streamedGeneralCard)}
+                          onClick={() => void copyStreamedGeneralCard(withCharacterPortraitAsset(streamedGeneralCard, characterPortraitAsset))}
                           className="generate-button flex-1"
                           style={{ backgroundColor: '#3b82f6', backgroundImage: 'linear-gradient(to right, #3b82f6, #2563eb)' }}
                         >
@@ -2910,7 +2916,7 @@ export const CreatorPage: React.FC = () => {
                         </button>
                       </div>
                       <JsonSizeIndicator
-                        data={streamedGeneralCard}
+                        data={withCharacterPortraitAsset(streamedGeneralCard, characterPortraitAsset)}
                         warningText="⚠️ 接近云端 300KB 上限，保存/替换可能失败，请先精简数据。"
                       />
                       <div className="mt-2 pt-6 border-t border-gray-200">
@@ -2929,6 +2935,7 @@ export const CreatorPage: React.FC = () => {
                         <h3 className="text-lg font-medium text-blue-900" style={{ marginBottom: '1rem' }}>生成立绘</h3>
                         <CharacterPortraitAssetPanel
                           prompt={streamPortraitPrompt}
+                          initialAsset={readCharacterPortraitAsset(streamedGeneralCard)}
                           onPortraitAssetChange={setCharacterPortraitAsset}
                         />
                       </div>
@@ -3064,25 +3071,25 @@ export const CreatorPage: React.FC = () => {
                 <div className="text-center">
                   <h3 className="text-lg font-medium text-blue-900" style={{ marginBottom: '1rem' }}>保存设定文件</h3>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    {resolvedResultPayload && nonStreamStructuredTemplate && (
+                    {persistedResultPayload && nonStreamStructuredTemplate && (
                       <>
                         <SaveJsonButton
                           template={nonStreamStructuredTemplate}
-                          data={resolvedResultPayload}
+                          data={persistedResultPayload}
                           mode={jsonSaveMode}
                           recommendedMode={recommendedJsonMode}
                         />
                         <SaveToCloudButton
-                          data={resolvedResultPayload}
+                          data={persistedResultPayload}
                           buttonText="保存到云端"
                           style={{ backgroundColor: '#22c55e', backgroundImage: 'linear-gradient(to right, #22c55e, #16a34a)' }}
                         />
                       </>
                     )}
                   </div>
-                  {resolvedResultPayload && (
+                  {persistedResultPayload && (
                     <JsonSizeIndicator
-                      data={resolvedResultPayload}
+                      data={persistedResultPayload}
                       warningText="⚠️ 接近云端 300KB 上限，保存/替换可能失败，请先精简数据。"
                     />
                   )}
@@ -3104,6 +3111,7 @@ export const CreatorPage: React.FC = () => {
                   <h3 className="text-lg font-medium text-blue-900" style={{ marginBottom: '1rem' }}>生成立绘</h3>
                   <CharacterPortraitAssetPanel
                     prompt={nonStreamResultFollowUp?.portraitPrompt ?? ''}
+                    initialAsset={readCharacterPortraitAsset(resolvedResultPayload)}
                     onPortraitAssetChange={setCharacterPortraitAsset}
                   />
                 </div>

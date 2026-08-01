@@ -36,6 +36,7 @@ import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
 import { STREAM_ABORT_REASON_USER } from '@/lib/stream/abort';
 import type { AIReasoningEnvelope } from '@/types/ai-reasoning';
 import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
+import { readCharacterPortraitAsset, withCharacterPortraitAsset } from '@/lib/visual-asset/persistence';
 
 type FreeSchemaId = 'magical-girl' | 'canshou' | 'scenario' | 'general' | 'general-scenario';
 
@@ -665,6 +666,7 @@ export function FreePage() {
   };
 
   const renderResultActions = (data: any, kind: 'character' | 'scenario') => {
+    const persistedData = kind === 'character' ? withCharacterPortraitAsset(data, characterPortraitAsset) : data;
     const labelBase =
       kind === 'scenario'
         ? (data?.title || data?.name || '自定义情景')
@@ -676,20 +678,20 @@ export function FreePage() {
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
-            onClick={() => downloadJson(data, fileName)}
+            onClick={() => downloadJson(persistedData, fileName)}
             className="generate-button flex-1"
           >
             下载 JSON
           </button>
           <SaveToCloudButton
-            data={data}
+            data={persistedData}
             cardType={kind}
             buttonText="保存到云端"
             className="generate-button flex-1"
             style={{ backgroundColor: '#22c55e', backgroundImage: 'linear-gradient(to right, #22c55e, #16a34a)' }}
           />
           <button
-            onClick={() => void copyToClipboard(data, kind === 'scenario' ? '情景卡' : '角色卡')}
+            onClick={() => void copyToClipboard(persistedData, kind === 'scenario' ? '情景卡' : '角色卡')}
             className="generate-button flex-1"
             style={{ backgroundColor: '#3b82f6', backgroundImage: 'linear-gradient(to right, #3b82f6, #2563eb)' }}
           >
@@ -697,7 +699,7 @@ export function FreePage() {
           </button>
         </div>
         <JsonSizeIndicator
-          data={data}
+          data={persistedData}
           warningText="⚠️ 接近云端 300KB 上限，保存/替换可能失败，请先精简数据。"
         />
       </div>
@@ -753,6 +755,7 @@ export function FreePage() {
                       <h3 className="text-lg font-medium text-blue-900 mb-4">生成立绘</h3>
                       <CharacterPortraitAssetPanel
                         prompt={promptForPortrait}
+                        initialAsset={readCharacterPortraitAsset(streamedGeneralCard)}
                         onPortraitAssetChange={setCharacterPortraitAsset}
                       />
                     </div>
@@ -816,6 +819,7 @@ export function FreePage() {
               <h3 className="text-lg font-medium text-blue-900 mb-4">生成立绘</h3>
               <CharacterPortraitAssetPanel
                 prompt={`${formatImagePromptAppearance(safe.appearance)}，二次元，魔法少女`}
+                initialAsset={readCharacterPortraitAsset(safe)}
                 onPortraitAssetChange={setCharacterPortraitAsset}
               />
             </div>
@@ -844,6 +848,7 @@ export function FreePage() {
               <h3 className="text-lg font-medium text-blue-900 mb-4">生成立绘</h3>
               <CharacterPortraitAssetPanel
                 prompt={promptForPortrait}
+                initialAsset={readCharacterPortraitAsset(safe)}
                 onPortraitAssetChange={setCharacterPortraitAsset}
               />
             </div>
@@ -874,6 +879,7 @@ export function FreePage() {
               <h3 className="text-lg font-medium text-blue-900 mb-4">生成立绘</h3>
               <CharacterPortraitAssetPanel
                 prompt={promptForPortrait}
+                initialAsset={readCharacterPortraitAsset(resultData)}
                 onPortraitAssetChange={setCharacterPortraitAsset}
               />
             </div>

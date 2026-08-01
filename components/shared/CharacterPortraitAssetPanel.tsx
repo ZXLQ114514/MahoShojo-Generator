@@ -10,13 +10,19 @@ type PortraitChoice = 'none' | 'generated' | 'uploaded';
 
 interface CharacterPortraitAssetPanelProps {
   prompt: string;
+  initialAsset?: CharacterCardPortraitAsset | null;
   onPortraitAssetChange?: (asset: CharacterCardPortraitAsset | null) => void;
 }
 
-export function CharacterPortraitAssetPanel({ prompt, onPortraitAssetChange }: CharacterPortraitAssetPanelProps) {
-  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
-  const [choice, setChoice] = useState<PortraitChoice>('none');
+export function CharacterPortraitAssetPanel({ prompt, initialAsset, onPortraitAssetChange }: CharacterPortraitAssetPanelProps) {
+  const restoredAsset = initialAsset;
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(
+    restoredAsset?.source === 'generated' ? restoredAsset.imageUrl : null
+  );
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(
+    restoredAsset?.source === 'uploaded' ? restoredAsset.imageUrl : null
+  );
+  const [choice, setChoice] = useState<PortraitChoice>(restoredAsset?.source ?? 'none');
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +44,14 @@ export function CharacterPortraitAssetPanel({ prompt, onPortraitAssetChange }: C
     })();
     onPortraitAssetChange?.(asset);
   }, [choice, generatedImageUrl, uploadedImageUrl, onPortraitAssetChange]);
+
+  useEffect(() => {
+    const asset = initialAsset ?? null;
+    if (!asset) return;
+    if (asset.source === 'generated') setGeneratedImageUrl(asset.imageUrl);
+    if (asset.source === 'uploaded') setUploadedImageUrl(asset.imageUrl);
+    setChoice(asset.source);
+  }, [initialAsset]);
 
   const handleUploadFile: ChangeEventHandler<HTMLInputElement> = async (event) => {
     setUploadError(null);

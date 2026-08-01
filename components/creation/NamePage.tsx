@@ -9,7 +9,6 @@ import Link from 'next/link';
 import { useCooldown } from '@/lib/cooldown';
 import { getSensitiveWordRedirectTarget } from '@/lib/content-safety/client';
 import { useAppRouterAdapter } from '@/lib/app-router-adapter';
-import TachieGenerator from '@/components/TachieGenerator';
 import Footer from '@/components/Footer';
 import { GeneratedByUserBadge } from '@/components/shared/GeneratedByUserBadge';
 import { ErrorMessage } from '@/components/ErrorMessage';
@@ -20,6 +19,9 @@ import { formatHttpErrorMessage } from '@/lib/client/httpError';
 import { ThemeImage } from '@/components/shared/ThemeImage';
 import { authStorage } from '@/lib/auth';
 import { formatImagePromptAppearance } from '@/lib/tachie/prompt-utils';
+import { CharacterPortraitAssetPanel } from '@/components/shared/CharacterPortraitAssetPanel';
+import type { CharacterCardPortraitAsset } from '@/types/visual-asset';
+import { readCharacterPortraitAsset, withCharacterPortraitAsset } from '@/lib/visual-asset/persistence';
 
 // 注意：QueueStatus 组件及其相关逻辑已被移除，因为它在Serverless环境下无法正常工作。
 
@@ -170,6 +172,7 @@ export function NamePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
+  const [characterPortraitAsset, setCharacterPortraitAsset] = useState<CharacterCardPortraitAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const { isCooldown, startCooldown, remainingTime } = useCooldown('generateMagicalGirlCooldown', 60000);
@@ -316,7 +319,7 @@ export function NamePage() {
     if (!magicalGirl) return;
 
     // 签名已包含在 magicalGirl 对象中
-    const jsonData = JSON.stringify(magicalGirl, null, 2);
+    const jsonData = JSON.stringify(withCharacterPortraitAsset(magicalGirl, characterPortraitAsset), null, 2);
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -499,8 +502,10 @@ export function NamePage() {
             {magicalGirl && (
               <div className="text-center w-full" style={{ marginTop: '2rem' }}>
                 <h3 className="text-lg font-medium text-gray-900" style={{ marginBottom: '1rem' }}>立绘生成</h3>
-                <TachieGenerator
+                <CharacterPortraitAssetPanel
                   prompt={`${formatImagePromptAppearance(magicalGirl.appearance)}，二次元，魔法少女`}
+                  initialAsset={readCharacterPortraitAsset(magicalGirl)}
+                  onPortraitAssetChange={setCharacterPortraitAsset}
                 />
               </div>
             )}
