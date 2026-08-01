@@ -272,6 +272,8 @@ export enum LoadBalanceStrategy {
 let roundRobinCounter = 0;
 
 export interface GenerateWithAIOptions {
+  /** 用于服务端日志，不接受或记录 API Key、邮箱等凭据。 */
+  username?: string | null;
   loadBalanceStrategy?: LoadBalanceStrategy;
   providerOverride?: AIProvider;
   telemetry?: {
@@ -384,12 +386,16 @@ export async function generateWithAI<T, I = string>(
     const retryCount = provider.retryCount ?? 1;
     // 从可能的多个模型中选择一个，如果有模型覆盖则使用覆盖的模型
     const selectedModel = generationConfig.modelOverride || selectRandomModel(provider.model);
-    log.info(`开始使用提供商: ${provider.name} 模型: ${selectedModel} 重试次数: ${retryCount}`);
+    log.info(`开始使用提供商: ${provider.name} 模型: ${selectedModel} 重试次数: ${retryCount}`, {
+      username: options?.username?.trim() || '匿名用户',
+    });
 
     // 对当前提供商进行重试
     for (let attempt = 0; attempt < retryCount; attempt++) {
       try {
-        log.debug(`开始尝试: 提供商: ${provider.name} 模型: ${selectedModel} 尝试次数: ${attempt + 1} / ${retryCount}`);
+        log.debug(`开始尝试: 提供商: ${provider.name} 模型: ${selectedModel} 尝试次数: ${attempt + 1} / ${retryCount}`, {
+          username: options?.username?.trim() || '匿名用户',
+        });
 
         if (options?.telemetry) {
           options.telemetry.providerName = provider.name;
@@ -556,7 +562,9 @@ export async function generateWithAI<T, I = string>(
           throw enhancedError;
         }
 
-        log.info(`提供商生成成功: 提供商: ${provider.name} 尝试次数: ${attempt + 1}`);
+        log.info(`提供商生成成功: 提供商: ${provider.name} 尝试次数: ${attempt + 1}`, {
+          username: options?.username?.trim() || '匿名用户',
+        });
         if (options?.channelContext) {
           const ctx = options.channelContext;
           void recordAiChannelOutcome({ providerId: ctx.providerId, modelId: ctx.modelId, ...classifySuccess() });
@@ -569,7 +577,10 @@ export async function generateWithAI<T, I = string>(
         return object as T;
       } catch (error) {
         lastError = error;
-        log.error(`提供商 ${provider.name} 第 ${attempt + 1} 次失败`, { error });
+        log.error(`提供商 ${provider.name} 第 ${attempt + 1} 次失败`, {
+          username: options?.username?.trim() || '匿名用户',
+          error,
+        });
 
         if (NoObjectGeneratedError.isInstance(error)) {
           log.debug(`NoObjectGeneratedError 详情: 提供商: ${provider.name}`, {

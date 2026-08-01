@@ -119,6 +119,7 @@ const buildQuestionnaireLoreText = (questionnaires: RequestQuestionnaire[]): str
     });
 
 	    try {
+	        const requestUsername = (await authUserResolver.getUser())?.username ?? '匿名用户';
 	        const normalizeOptionalString = (value: unknown): string | null => {
 	            if (typeof value !== 'string') return null;
 	            const trimmed = value.trim();
@@ -508,7 +509,9 @@ const buildQuestionnaireLoreText = (questionnaires: RequestQuestionnaire[]): str
 
         const aiTelemetry: NonNullable<GenerateWithAIOptions['telemetry']> = {};
         const channelContext = buildChannelContextFromPayload(customProviderPayload, customModelOverride);
-        const aiOptions = providerOptions ? { ...providerOptions, channelContext, telemetry: aiTelemetry } : { channelContext, telemetry: aiTelemetry };
+        const aiOptions = providerOptions
+            ? { ...providerOptions, channelContext, telemetry: aiTelemetry, username: requestUsername }
+            : { channelContext, telemetry: aiTelemetry, username: requestUsername };
         let usedModelOverride: string | undefined;
         let aiResult: BattleReportResult | null = null;
         let lastModelOverrideError: unknown = null;
