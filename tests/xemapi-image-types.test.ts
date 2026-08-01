@@ -92,6 +92,19 @@ describe('XemAPI image response parsing', () => {
     expect(result.imageUrls).toEqual(['https://cdn.example.test/generated.png']);
   });
 
+  test('将选择的图片尺寸传给 XemAPI', async () => {
+    let calledInit: RequestInit | undefined;
+    await generateXemApiImage(
+      { prompt: 'landscape scene', size: '1536x1024' },
+      [{ name: 'XemAPI_default', apiKey: 'test-key', baseUrl: 'https://xem.example/v1', model: 'text-model', type: 'openai' }],
+      async (_input, init) => {
+        calledInit = init;
+        return new Response(JSON.stringify({ data: [{ url: 'https://cdn.example.test/generated.png' }] }), { status: 200 });
+      },
+    );
+    expect(JSON.parse(String(calledInit?.body))).toMatchObject({ size: '1536x1024' });
+  });
+
   test('支持本次请求覆盖 API Key，且不写入请求体', async () => {
     let calledInit: RequestInit | undefined;
     await generateXemApiImage(

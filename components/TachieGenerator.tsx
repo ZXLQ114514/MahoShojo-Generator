@@ -17,6 +17,17 @@ type ModelScopePresetSize = (typeof MODELSCOPE_SIZE_OPTIONS)[number]["value"];
 
 const DEFAULT_MODELSCOPE_SIZE: ModelScopePresetSize = "1328x1328";
 
+const XEMAPI_SIZE_OPTIONS = [
+  { value: "1024x1024", label: "正方形（1024×1024）" },
+  { value: "1536x1024", label: "横向插画（1536×1024）" },
+  { value: "1024x1536", label: "竖向立绘（1024×1536）" },
+] as const;
+
+type XemApiSize = (typeof XEMAPI_SIZE_OPTIONS)[number]["value"];
+
+const getDefaultXemApiSize = (mode?: 'tachie' | 'illustration'): XemApiSize =>
+  mode === 'illustration' ? '1536x1024' : mode === 'tachie' ? '1024x1536' : '1024x1024';
+
 const isModelScopePresetSize = (value: unknown): value is ModelScopePresetSize =>
   typeof value === "string" && MODELSCOPE_SIZE_OPTIONS.some((option) => option.value === value);
 
@@ -51,6 +62,7 @@ export default function TachieGenerator({
   const [modelscopeSize, setModelscopeSize] = useState<ModelScopePresetSize>(DEFAULT_MODELSCOPE_SIZE);
   const [xemapiCredentialType, setXemapiCredentialType] = useState<"apiKey" | "licenseKey">("apiKey");
   const [xemapiCredential, setXemapiCredential] = useState("");
+  const [xemapiSize, setXemapiSize] = useState<XemApiSize>(() => getDefaultXemApiSize(mode));
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<TachieGenerationResult | null>(null);
   const [rememberCredentials, setRememberCredentials] = useState(false);
@@ -130,6 +142,7 @@ export default function TachieGenerator({
             setModelscopeSize(DEFAULT_MODELSCOPE_SIZE);
       setXemapiCredentialType("apiKey");
       setXemapiCredential("");
+      setXemapiSize(getDefaultXemApiSize(mode));
     }
   };
 
@@ -195,6 +208,7 @@ export default function TachieGenerator({
         modelscopeSize,
         xemapiApiKey: source === 'xemapi' && xemapiCredentialType === 'apiKey' ? xemapiCredential.trim() : undefined,
         imageGenerationLicenseKey: source === 'xemapi' && xemapiCredentialType === 'licenseKey' ? xemapiCredential.trim() : undefined,
+        xemapiSize,
         prompt: normalizedPrompt,
         mode,
         workflowUuid,
@@ -368,6 +382,14 @@ export default function TachieGenerator({
                 <select value={xemapiCredentialType} onChange={(e) => setXemapiCredentialType(e.target.value as "apiKey" | "licenseKey")} className="input-field" disabled={isGenerating}>
                   <option value="apiKey">直接输入 API Key</option>
                   <option value="licenseKey">输入图片生成许可密钥</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label htmlFor="xemapiSize" className="input-label">图片尺寸</label>
+                <select id="xemapiSize" value={xemapiSize} onChange={(e) => setXemapiSize(e.target.value as XemApiSize)} className="input-field" disabled={isGenerating}>
+                  {XEMAPI_SIZE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="input-group">

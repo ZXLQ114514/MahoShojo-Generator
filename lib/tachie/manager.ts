@@ -14,6 +14,7 @@ export interface TachieGenerationRequest {
     modelscopeSize?: string;
     xemapiApiKey?: string;
     imageGenerationLicenseKey?: string;
+    xemapiSize?: '1024x1024' | '1536x1024' | '1024x1536';
     prompt: string;
     mode?: TachieGenerateMode;
     workflowUuid?: string;
@@ -74,6 +75,7 @@ export const generateTachieWithProgress = async (
                         prompt: request.prompt,
                         credentialType: request.xemapiApiKey?.trim() ? "apiKey" : "licenseKey",
                         credential,
+                        size: request.xemapiSize,
                     }),
                 });
                 const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
