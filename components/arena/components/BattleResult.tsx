@@ -79,6 +79,9 @@ export function BattleResult({ onSaveImage }: BattleResultProps) {
     generationMode === 'stream'
       ? (streamingMarkdown ?? '').trim()
       : (newsReport ? toBattleReportMarkdown(newsReport as NewsReport) : '').trim();
+  const publicationOutputText = generationMode === 'stream'
+    ? (streamingMarkdown ?? '').trim()
+    : (newsReport ? toBattleReportMarkdown(newsReport as NewsReport).trim() : '');
   const redoPrecheck = precheckBattleReportForRedo(reportMarkdownForRedo, battleMode);
   const streamMetaDebugSummary = useMemo(() => {
     if (!streamUpdateMetaDebug) return null;
@@ -229,7 +232,13 @@ export function BattleResult({ onSaveImage }: BattleResultProps) {
         )
       )}
 
-      {!isGenerating && hasBattleReport ? <BattleReportPublicationControl generationId={lastGenerationId} mode={battleMode} /> : null}
+      {!isGenerating && hasBattleReport ? (
+        <BattleReportPublicationControl
+          generationId={lastGenerationId}
+          mode={battleMode}
+          outputText={publicationOutputText}
+        />
+      ) : null}
 
       {shouldShowIllustrationPanel && (
         <BattleIllustrationPanel

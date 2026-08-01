@@ -1,5 +1,6 @@
 import {
   getBattleReportGenerationByIdLite,
+  updateBattleReportGenerationOutputPreview,
   updateBattleReportGenerationPublication,
 } from '@/lib/database/battle-report-generations';
 import { loadBattleReportGenerationOutputText } from '@/lib/arena/battle-report-record-utils';
@@ -25,6 +26,13 @@ const parseIsPublic = (value: unknown): boolean | null => {
   return null;
 };
 
+const parseRecoveryOutputText = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!text || text.length > 2_000_000) return null;
+  return text;
+};
+
 export async function appRouteHandler(req: Request): Promise<Response> {
   if (req.method !== 'PATCH') return json({ error: 'Method not allowed' }, { status: 405 });
 
@@ -47,9 +55,9 @@ export async function appRouteHandler(req: Request): Promise<Response> {
     return json({ error: '只有竞技场战报支持公开展示，PVP 战报暂不支持' }, { status: 400 });
   }
 
-  let body: { isPublic?: unknown; mode?: unknown };
+  let body: { isPublic?: unknown; mode?: unknown; outputText?: unknown };
   try {
-    body = await req.json() as { isPublic?: unknown };
+    body = await req.json() as { isPublic?: unknown; mode?: unknown; outputText?: unknown };
   } catch {
     return json({ error: '请求体不是合法 JSON' }, { status: 400 });
   }
@@ -63,12 +71,25 @@ export async function appRouteHandler(req: Request): Promise<Response> {
     if (record.status !== 'completed') return json({ error: '只有已完成的战报可以公开' }, { status: 400 });
     if (record.output_has_shield_words === 1) return json({ error: '战报包含屏蔽词，不能公开' }, { status: 422 });
 
-    const output = await loadBattleReportGenerationOutputText({
+    let output = await loadBattleReportGenerationOutputText({
       generationId: record.id,
       outputPreview: record.output_preview,
       outputChars: record.output_chars,
     });
-    const outputText = output.outputText?.trim() ?? '';
+    let outputText = output.outputText?.trim() ?? '';
+    const recoveryOutputText = parseRecoveryOutputText(body.outputText);
+    if ((!outputText || output.readError) && recoveryOutputText) {
+      const recovered = await updateBattleReportGenerationOutputPreview(record.id, recoveryOutputText);
+      if (recovered) {
+        output = {
+          outputText: recoveryOutputText,
+          source: 'd1' as const,
+          hasStoredOutput: true,
+          readError: null,
+        };
+        outputText = recoveryOutputText;
+      }
+    }
     if (!outputText || output.readError) return json({ error: '战报正文尚未保存完整，暂时不能公开' }, { status: 422 });
 
     const shieldResult = applyShieldWords(`${record.note ?? ''}\n${outputText}`);

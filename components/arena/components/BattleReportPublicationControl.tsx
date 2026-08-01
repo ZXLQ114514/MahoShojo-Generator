@@ -8,9 +8,10 @@ import type { BattleMode } from '../types';
 type Props = {
   generationId: string | null;
   mode: BattleMode;
+  outputText?: string | null;
 };
 
-export function BattleReportPublicationControl({ generationId, mode }: Props) {
+export function BattleReportPublicationControl({ generationId, mode, outputText }: Props) {
   const { isAuthenticated } = useAuth();
   const [isPublic, setIsPublic] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -34,7 +35,13 @@ export function BattleReportPublicationControl({ generationId, mode }: Props) {
       const response = await fetch(`/api/me/battle-reports/${encodeURIComponent(generationId)}/publication`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPublic: nextValue, mode }),
+        body: JSON.stringify({
+          isPublic: nextValue,
+          mode,
+          ...(nextValue && typeof outputText === 'string' && outputText.trim()
+            ? { outputText: outputText.trim() }
+            : {}),
+        }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string; isPublic?: boolean };
       if (!response.ok) throw new Error(payload.error || '公开状态保存失败');
