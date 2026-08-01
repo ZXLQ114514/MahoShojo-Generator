@@ -44,6 +44,9 @@ describe('battle illustration prompt', () => {
     expect(result.appearanceLines[0]).toContain('星绮：黑金礼装');
     expect(result.appearanceLines[1]).toContain('裂烬兽：高大骨甲');
     expect(result.appearanceLines[2]).toContain('调查员 K：穿着风衣');
+    expect(result.prompt).toContain('所有角色同场出现');
+    expect(result.prompt).toContain('略低机位');
+    expect(result.prompt).toContain('不要让角色并排静止站立');
   });
 
   test('能从 markdown 正文提取尾段且忽略胜利者区块', () => {

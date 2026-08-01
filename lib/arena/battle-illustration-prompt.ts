@@ -320,6 +320,9 @@ export const buildBattleIllustrationPrompt = (input: BattleIllustrationPromptInp
   const currentStateSummary = joinSummaryLines(currentStateLines, STATE_BLOCK_MAX_CHARS);
   const impactSummary = joinSummaryLines(impactLines, IMPACT_BLOCK_MAX_CHARS);
   const visualMoment = extractVisualMoment(reportTail, VISUAL_MOMENT_MAX_CHARS);
+  const sceneComposition = rosterNames.length >= 2
+    ? `所有角色同场出现并保持清晰的空间关系（${rosterNames.join('、')}），形成对峙或交错战斗动线；不要拆成多个头像、独立立绘或角色卡。`
+    : '以主体角色的完整身体和所处战场为重点，避免静态证件照式构图。';
 
   const sections: string[] = [];
   sections.push('风格标签：二次元魔法少女战斗插画，电影感光影，高质量，干净画面。');
@@ -329,7 +332,8 @@ export const buildBattleIllustrationPrompt = (input: BattleIllustrationPromptInp
   sections.push(`关键瞬间：${visualMoment}`);
   if (currentStateSummary) sections.push(`角色情绪与姿态：${currentStateSummary}`);
   if (impactSummary) sections.push(`关系与气质暗示：${impactSummary}`);
-  sections.push('镜头构图：突出故事结尾的动作停顿与情景，保留前后景和景深层次，视觉焦点集中在角色上。');
+  sections.push(`动作设计：表现关键瞬间中的攻击、防御、闪避、冲撞或能力释放动作；如果正文没有明确动作，表现战斗后的动态停顿，不要让角色并排静止站立。${sceneComposition}`);
+  sections.push('镜头构图：横向宽幅战场视角，中景到全景，三分之四视角，略低机位，使用对角线动作和前中后景制造速度感；主体清晰，环境用于交代战场，不要把画面做成角色宣传海报。');
   sections.push('输出要求：仅输出插画画面，不要任何可读文本。');
 
   const joinedPrompt = sections.join('\n\n').trim();
