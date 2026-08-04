@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { authStorage } from '@/lib/auth';
 import { useAuth } from '@/lib/useAuth';
 import { configurationCatalog } from '@/lib/admin/configuration-catalog';
+import { AI_PROVIDER_CATALOG } from '@/lib/ai/constants';
 
 type AdminCard = {
   id: string;
@@ -65,6 +66,11 @@ type Tab = 'cards' | 'reports' | 'users' | 'licenses' | 'settings';
 type CardStatus = 'pending' | 'approved' | 'rejected' | 'all';
 type AdminUserPatch = { isBanned?: boolean; isAdmin?: boolean; isReviewExempt?: boolean; slotCount?: number };
 type CooldownSettings = { systemSeconds: number; freeSeconds: number; customSeconds: number; battleSeconds: number };
+type PublicBattleSummarySettings = { intervalMinutes: number; model: string; enabled: boolean };
+
+const SUMMARY_MODEL_OPTIONS = Array.from(new Set(
+  AI_PROVIDER_CATALOG.flatMap((provider) => provider.models.map((model) => model.value)),
+)).filter((model) => model && model !== 'default');
 
 const readError = async (response: Response, fallback: string): Promise<string> => {
   const payload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -95,6 +101,7 @@ export function AdminPage() {
   const [licenseHours, setLicenseHours] = useState(24);
   const [createdLicenseKey, setCreatedLicenseKey] = useState<string | null>(null);
   const [cooldownSettings, setCooldownSettings] = useState<CooldownSettings>({ systemSeconds: 60, freeSeconds: 120, customSeconds: 3, battleSeconds: 120 });
+  const [publicBattleSummary, setPublicBattleSummary] = useState<PublicBattleSummarySettings>({ intervalMinutes: 1440, model: '', enabled: true });
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,8 +137,9 @@ export function AdminPage() {
 
   const loadSettings = useCallback(async () => {
     const response = await request('/api/admin/settings');
-    const payload = (await response.json()) as { publicAiCooldown?: CooldownSettings };
+    const payload = (await response.json()) as { publicAiCooldown?: CooldownSettings; publicBattleSummary?: PublicBattleSummarySettings };
     if (payload.publicAiCooldown) setCooldownSettings(payload.publicAiCooldown);
+    if (payload.publicBattleSummary) setPublicBattleSummary(payload.publicBattleSummary);
   }, [request]);
 
   const loadLicenses = useCallback(async () => {
@@ -211,9 +219,9 @@ export function AdminPage() {
       await request('/api/admin/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publicAiCooldown: cooldownSettings }),
+        body: JSON.stringify({ publicAiCooldown: cooldownSettings, publicBattleSummary }),
       });
-      setNotice('生成等待时长已保存，后续新请求立即生效');
+      setNotice('生成等待时长和公开战报总结设置已保存');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '设置保存失败');
     }
@@ -343,6 +351,7 @@ export function AdminPage() {
             </section>
           </div> : null}
           {!loading && tab === 'settings' ? <div className="space-y-6"><section className="max-w-xl space-y-4"><div><h3 className="font-semibold">生成后等待时长</h3><p className="mt-1 text-sm text-gray-500">在线配置，单位为秒，范围 0 到 86400。修改后新请求立即使用新值。</p></div>{([['systemSeconds', '系统供应商生成间隔'], ['freeSeconds', '免费生成间隔'], ['customSeconds', '自定义供应商生成间隔'], ['battleSeconds', '战斗/战报生成间隔']] as const).map(([key, label]) => <label key={key} className="flex items-center justify-between gap-4 rounded border border-gray-200 px-3 py-3 text-sm"><span>{label}</span><input type="number" min="0" max="86400" value={cooldownSettings[key]} onChange={(event) => setCooldownSettings((current) => ({ ...current, [key]: Number(event.target.value) }))} className="w-28 rounded border border-gray-300 px-2 py-1.5 text-right" /></label>)}<button type="button" onClick={() => void saveSettings()} className="rounded bg-blue-600 px-4 py-2 text-sm text-white">保存设置</button></section><section><div className="mb-3"><h3 className="font-semibold">全部配置项</h3><p className="mt-1 text-sm text-gray-500">“在线管理”可直接在本页修改；“环境变量”和“配置文件”需要修改部署环境后重新构建。密钥值不会显示。</p></div><div className="grid gap-4 xl:grid-cols-2">{configurationCatalog.map((category) => <section key={category.id} className="rounded-lg border border-gray-200 p-4"><h4 className="font-semibold text-gray-900">{category.title}</h4><p className="mt-1 text-xs leading-5 text-gray-500">{category.description}</p><div className="mt-3 space-y-3">{category.entries.map((entry) => <div key={entry.key} className="border-t border-gray-100 pt-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-gray-800">{entry.name}</span><span className={`rounded-full px-2 py-1 text-xs ${entry.management === 'admin' ? 'bg-green-50 text-green-700' : entry.management === 'env' ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>{entry.management === 'admin' ? '在线管理' : entry.management === 'env' ? '环境变量' : '配置文件'}</span></div><p className="mt-1 break-all font-mono text-xs text-gray-500">{entry.key}</p><p className="mt-1 text-xs leading-5 text-gray-600">默认：{entry.defaultValue} · {entry.effect}</p></div>)}</div></section>)}</div></section></div> : null}
+          {!loading && tab === 'settings' ? <section className="max-w-xl space-y-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4"><div><h3 className="font-semibold text-indigo-950">公开战报角色评价总结</h3><p className="mt-1 text-sm leading-6 text-indigo-900/70">服务器按周期总结所有非日常公开战报；用户手动触发的总结不会保存。周期由页面访问触发检查，部署到 Cloudflare 后可由外部定时访问公开总结接口。</p></div><label className="flex items-center gap-2 text-sm text-indigo-950"><input type="checkbox" checked={publicBattleSummary.enabled} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, enabled: event.target.checked }))} />启用自动总结</label><label className="block text-sm text-indigo-950">自动总结间隔（分钟）<input type="number" min="5" max="10080" value={publicBattleSummary.intervalMinutes} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, intervalMinutes: Number(event.target.value) }))} className="mt-1 w-full rounded border border-indigo-200 bg-white px-3 py-2" /></label><label className="block text-sm text-indigo-950">自动总结模型<select value={publicBattleSummary.model} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, model: event.target.value }))} className="mt-1 w-full rounded border border-indigo-200 bg-white px-3 py-2"><option value="">系统默认配置</option>{SUMMARY_MODEL_OPTIONS.map((model) => <option key={model} value={model}>{model}</option>)}</select></label><p className="text-xs leading-5 text-indigo-900/70">评价分数和八档等级由服务端固定公式计算，模型只生成机制与理由。模型必须已存在于系统模型目录。</p></section> : null}
         </section>
       </div>
     </main>
