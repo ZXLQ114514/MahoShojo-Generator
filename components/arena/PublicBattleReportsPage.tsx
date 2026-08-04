@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { PublicBattleReportViewer, type PublicBattleReport } from './PublicBattleReportViewer';
 import { PublicBattleReportKDChart } from './PublicBattleReportKDChart';
+import { PublicBattleSummaryPanel } from './PublicBattleSummaryPanel';
 
 type PublicReportSummary = {
   id: string;
@@ -94,6 +95,7 @@ export function PublicBattleReportsPage() {
           <div className="flex flex-wrap gap-3 text-sm"><Link href="/arena-reports/upload" className="text-indigo-300 hover:text-white hover:underline">上传连续战报</Link><Link href="/arena" className="text-indigo-300 hover:text-white hover:underline">进入竞技场</Link><Link href="/" className="text-indigo-300 hover:text-white hover:underline">返回首页</Link></div>
         </div>
 
+        <PublicBattleSummaryPanel />
         <PublicBattleReportKDChart />
 
         <section className="mb-6 rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-xl backdrop-blur"><form className="flex flex-wrap gap-3" onSubmit={(event) => { event.preventDefault(); setOffset(0); void loadReports(); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索战报标题或情景标题" className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" /><button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">搜索</button></form></section>

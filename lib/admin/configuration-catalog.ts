@@ -22,6 +22,7 @@ export const configurationCatalog: ConfigurationCatalogCategory[] = [
       { name: 'AI 供应商列表', key: 'AI_PROVIDERS_CONFIG', defaultValue: '空数组', effect: '配置服务端供应商、模型、权重、重试次数和跳过概率。', management: 'env' },
       { name: '负载均衡策略', key: 'AI_LOAD_BALANCE_STRATEGY', defaultValue: 'random', effect: '控制多个供应商的选择方式：sequential、random、round_robin。', management: 'env' },
       { name: '公开 AI 生成间隔', key: 'public_ai_cooldown_*', defaultValue: '系统 60 秒 / 免费 120 秒 / 自定义 3 秒 / 战斗 120 秒', effect: '限制公开生成和战斗战报的连续请求频率。', management: 'admin' },
+      { name: '公开战报角色评价总结', key: 'public_battle_summary_*', defaultValue: '启用 / 1440 分钟 / 系统默认模型', effect: '按周期总结非日常公开战报并生成角色评价；分数和等级由服务端固定公式计算。', management: 'admin' },
       { name: '流式读取超时', key: 'NEXT_PUBLIC_STREAM_READ_*_TIMEOUT_MS', defaultValue: 'idle 150000 / total 600000', effect: '控制流式生成的空闲超时和总超时。', management: 'env' },
     ],
   },
