@@ -13,6 +13,7 @@ export const PUBLIC_BATTLE_SUMMARY_INTERVAL_SETTING_KEY = 'public_battle_summary
 export const PUBLIC_BATTLE_SUMMARY_MODEL_SETTING_KEY = 'public_battle_summary_model';
 export const PUBLIC_BATTLE_SUMMARY_ENABLED_SETTING_KEY = 'public_battle_summary_enabled';
 
+export const PUBLIC_BATTLE_SUMMARY_REPORT_LIMIT = 50;
 export const DEFAULT_PUBLIC_BATTLE_SUMMARY_SETTINGS = {
   intervalMinutes: 1440,
   model: '',
@@ -58,7 +59,35 @@ export type PublicBattleSummary = {
   evaluations: PublicBattleCharacterStats[];
 };
 
+
+/** 按战报而不是 combatant 行限制总结输入，避免单篇战报的多个角色挤占额度。 */
+export const limitPublicBattleSummaryRows = (
+  rows: PublicBattleReportKDRow[],
+  limit = PUBLIC_BATTLE_SUMMARY_REPORT_LIMIT,
+): PublicBattleReportKDRow[] => {
+  const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : PUBLIC_BATTLE_SUMMARY_REPORT_LIMIT;
+  const reports = new Map<string, { startedAt: string; firstIndex: number }>();
+
+  rows.forEach((row, index) => {
+    if (!reports.has(row.generationId)) {
+      reports.set(row.generationId, { startedAt: row.startedAt, firstIndex: index });
+    }
+  });
+
+  const selectedIds = new Set(
+    [...reports.entries()]
+      .sort(([, left], [, right]) => {
+        const timeDifference = Date.parse(right.startedAt) - Date.parse(left.startedAt);
+        return timeDifference || right.firstIndex - left.firstIndex;
+      })
+      .slice(0, safeLimit)
+      .map(([generationId]) => generationId),
+  );
+
+  return rows.filter((row) => selectedIds.has(row.generationId));
+};
 type AiEvaluation = {
+
   characterName: string;
   mechanism: string;
   reason: string;
@@ -235,7 +264,8 @@ export const setStoredPublicBattleSummary = async (db: AppDrizzleDb, userId: num
 export const generatePublicBattleSummary = async (input: { model?: string; username?: string | null }): Promise<PublicBattleSummary> => {
   const db = getDrizzleDbFromRuntime();
   if (!db) throw new Error('总结服务暂不可用');
-  const stats = buildPublicBattleCharacterStats(await listPublicBattleReportKDRows(db));
+  const summaryRows = limitPublicBattleSummaryRows(await listPublicBattleReportKDRows(db));
+  const stats = buildPublicBattleCharacterStats(summaryRows);
   const model = input.model?.trim() ?? '';
   const aiResult = stats.characters.length === 0
     ? { evaluations: [] as AiEvaluation[] }
