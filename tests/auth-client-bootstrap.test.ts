@@ -160,8 +160,61 @@ describe('authStorage session bootstrap', () => {
         body: JSON.stringify({ code: 'A3F8-E9C2-1D4B' }),
       });
 
+     expect(response.ok).toBe(true);
+     expect(fetchMock).toHaveBeenCalledTimes(2);
+   } finally {
+     authStorage.clearAuth();
+     globalThis.fetch = previousFetch;
+     (globalThis as typeof globalThis & { window?: unknown }).window = previousWindow;
+     (globalThis as typeof globalThis & { localStorage?: unknown }).localStorage = previousLocalStorage;
+   }
+ });
+
+  test('持有 authKey 时，authStorage.fetch 应把 Authorization Bearer 头附到出站请求', async () => {
+    const previousWindow = (globalThis as typeof globalThis & { window?: unknown }).window;
+    const previousLocalStorage = (globalThis as typeof globalThis & { localStorage?: unknown }).localStorage;
+    const previousFetch = globalThis.fetch;
+
+    try {
+      (globalThis as typeof globalThis & { window?: unknown }).window = {};
+      (globalThis as typeof globalThis & { localStorage?: unknown }).localStorage = new LocalStorageMock();
+
+      await authStorage.setAuth({
+        username: 'arena-author',
+        authKey: 'legacy-auth-key-9012',
+        userId: 9012,
+        activityToken: 'activity-9012-0001',
+      });
+
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        expect(url).toBe('/api/me/battle-reports/gen-9012/publication');
+        expect(init?.method).toBe('PATCH');
+        expect(init?.credentials).toBe('same-origin');
+
+        const headers = new Headers(init?.headers);
+        expect(headers.get('Authorization')).toBe('Bearer legacy-auth-key-9012');
+        expect(headers.get('Content-Type')).toBe('application/json');
+
+        const body = JSON.parse(String(init?.body)) as { isPublic?: boolean; mode?: string };
+        expect(body.isPublic).toBe(true);
+        expect(body.mode).toBe('classic');
+
+        return new Response(JSON.stringify({ success: true, isPublic: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+      globalThis.fetch = fetchMock as typeof fetch;
+
+      const response = await authStorage.fetch('/api/me/battle-reports/gen-9012/publication', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: true, mode: 'classic' }),
+      });
+
       expect(response.ok).toBe(true);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       authStorage.clearAuth();
       globalThis.fetch = previousFetch;

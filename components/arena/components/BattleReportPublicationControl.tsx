@@ -33,7 +33,8 @@ export function BattleReportPublicationControl({ generationId, mode, outputText 
     setIsSaving(true);
     setMessage(null);
     try {
-      const response = await authStorage.fetch(`/api/me/battle-reports/${encodeURIComponent(generationId)}/publication`, {
+      const url = `/api/me/battle-reports/${encodeURIComponent(generationId)}/publication`;
+      const init: RequestInit = {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -43,9 +44,21 @@ export function BattleReportPublicationControl({ generationId, mode, outputText 
             ? { outputText: outputText.trim() }
             : {}),
         }),
-      });
+      };
+      let response = await authStorage.fetch(url, init);
+      // 客户端缓存的旧版 authKey 可能与服务端不一致而返回 401；清缓存后从会话重新桥接一次 Bearer 再重试，仍失败则提示重新登录。
+      if (response.status === 401) {
+        authStorage.clearAuth();
+        if (await authStorage.getAuthHeader()) {
+          response = await authStorage.fetch(url, init);
+        }
+      }
       const payload = await response.json().catch(() => ({})) as { error?: string; isPublic?: boolean };
-      if (!response.ok) throw new Error(payload.error || '公开状态保存失败');
+      if (!response.ok) {
+        throw new Error(
+          response.status === 401 ? '登录状态已失效，请重新登录后再公开战报。' : (payload.error || '公开状态保存失败'),
+        );
+      }
       setIsPublic(nextValue);
       setMessage(nextValue ? '战报已公开，可在公开战报页查看。' : '战报已撤回公开。');
     } catch (error) {
