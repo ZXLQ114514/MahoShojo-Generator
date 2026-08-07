@@ -16,6 +16,7 @@ import { recordAiChannelOutcome } from './record-outcome';
 export type AttemptChannelContext = {
   providerId: string;
   modelId: string;
+  isSystemChannel?: boolean;
 };
 
 export type AttemptOutcomeRecorder = {
@@ -51,7 +52,7 @@ export function createAttemptOutcomeRecorder(
   channelContext?: AttemptChannelContext | null,
 ): AttemptOutcomeRecorder {
   let settled = false;
-  const isSystemChannel = channelContext?.providerId === 'system';
+  const isSystemChannel = channelContext?.isSystemChannel ?? channelContext?.providerId === 'system';
 
   const commit = (classification: OutcomeClassification): void => {
     if (!channelContext || settled) return;

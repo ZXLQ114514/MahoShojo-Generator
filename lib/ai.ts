@@ -11,6 +11,10 @@ import { enhanceErrorWithUpstreamMessage } from "@/lib/ai/utils/error-extraction
 import { buildStructuredJsonInstructionFromZodSchema, parseStructuredJsonWithSchema } from "@/lib/ai/utils/structured-json";
 import { classifySuccess, classifyOutcome, recordAiChannelOutcome } from "@/lib/ai/availability";
 import { buildReasoningSummary } from "@/lib/ai/reasoning-normalizer";
+import {
+  filterProvidersForModelOverride,
+  resolveAttemptChannelContext,
+} from '@/lib/ai/provider-routing';
 import type { AIReasoningEnvelope } from "@/types/ai-reasoning";
 
 // 延迟函数
@@ -368,6 +372,15 @@ export async function generateWithAI<T, I = string>(
       break;
   }
 
+  const originalProviderCount = providersToTry.length;
+  providersToTry = filterProvidersForModelOverride(providersToTry, generationConfig.modelOverride);
+  if (providersToTry.length < originalProviderCount) {
+    log.info('已跳过不支持当前模型覆盖的供应商', {
+      model: generationConfig.modelOverride,
+      skippedCount: originalProviderCount - providersToTry.length,
+    });
+  }
+
   log.info('AI 提供商尝试顺序', {
     strategy,
     order: providersToTry.map((provider) => provider.name),
@@ -386,6 +399,12 @@ export async function generateWithAI<T, I = string>(
     const retryCount = provider.retryCount ?? 1;
     // 从可能的多个模型中选择一个，如果有模型覆盖则使用覆盖的模型
     const selectedModel = generationConfig.modelOverride || selectRandomModel(provider.model);
+    const attemptChannelContext = resolveAttemptChannelContext(
+      provider,
+      selectedModel,
+      options?.channelContext,
+      Boolean(options?.providerOverride && provider.name.startsWith(options.providerOverride.name)),
+    );
     log.info(`开始使用提供商: ${provider.name} 模型: ${selectedModel} 重试次数: ${retryCount}`, {
       username: options?.username?.trim() || '匿名用户',
     });
@@ -565,8 +584,8 @@ export async function generateWithAI<T, I = string>(
         log.info(`提供商生成成功: 提供商: ${provider.name} 尝试次数: ${attempt + 1}`, {
           username: options?.username?.trim() || '匿名用户',
         });
-        if (options?.channelContext) {
-          const ctx = options.channelContext;
+        if (attemptChannelContext) {
+          const ctx = attemptChannelContext;
           void recordAiChannelOutcome({ providerId: ctx.providerId, modelId: ctx.modelId, ...classifySuccess() });
         }
         if (options?.telemetry) {
@@ -593,9 +612,9 @@ export async function generateWithAI<T, I = string>(
         }
 
         // 记录本次 attempt 的失败 outcome
-        if (options?.channelContext) {
-          const ctx = options.channelContext;
-          const outcome = classifyOutcome(ctx.providerId === 'system', error);
+        if (attemptChannelContext) {
+          const ctx = attemptChannelContext;
+          const outcome = classifyOutcome(ctx.isSystemChannel === true, error);
           void recordAiChannelOutcome({ providerId: ctx.providerId, modelId: ctx.modelId, ...outcome });
         }
 
