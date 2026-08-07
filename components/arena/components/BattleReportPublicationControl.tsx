@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/lib/useAuth';
+import { authStorage } from '@/lib/auth';
 import type { BattleMode } from '../types';
 
 type Props = {
@@ -32,7 +33,7 @@ export function BattleReportPublicationControl({ generationId, mode, outputText 
     setIsSaving(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/me/battle-reports/${encodeURIComponent(generationId)}/publication`, {
+      const response = await authStorage.fetch(`/api/me/battle-reports/${encodeURIComponent(generationId)}/publication`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
