@@ -12,6 +12,10 @@ import {
     pipeStreamWithAttemptOutcome,
 } from "@/lib/ai/availability";
 import {
+    filterProvidersForModelOverride,
+    resolveAttemptChannelContext,
+} from '@/lib/ai/provider-routing';
+import {
     createStreamReadWithTimeout,
     STREAM_READ_IDLE_TIMEOUT_MS,
     STREAM_READ_TOTAL_TIMEOUT_MS,
@@ -268,6 +272,15 @@ export async function generateWithStreamAI(
             break;
     }
 
+    const originalProviderCount = providersToTry.length;
+    providersToTry = filterProvidersForModelOverride(providersToTry, generationConfig.modelOverride);
+    if (providersToTry.length < originalProviderCount) {
+        log.info('已跳过不支持当前模型覆盖的原始流供应商', {
+            model: generationConfig.modelOverride,
+            skippedCount: originalProviderCount - providersToTry.length,
+        });
+    }
+
     log.info('AI 原始流提供商尝试顺序', {
         strategy,
         order: providersToTry.map((provider) => provider.name),
@@ -286,6 +299,12 @@ export async function generateWithStreamAI(
         const retryCount = provider.retryCount ?? 1;
         // 从可能的多个模型中选择一个，如果有模型覆盖则使用覆盖的模型
         const selectedModel = generationConfig.modelOverride || selectRandomModel(provider.model);
+        const attemptChannelContext = resolveAttemptChannelContext(
+            provider,
+            selectedModel,
+            options?.channelContext,
+            Boolean(options?.providerOverride && provider.name.startsWith(options.providerOverride.name)),
+        );
         log.info(`开始使用提供商: ${provider.name} 模型: ${selectedModel} 重试次数: ${retryCount}`, {
             username: options?.username?.trim() || '匿名用户',
         });
@@ -293,7 +312,7 @@ export async function generateWithStreamAI(
         // 对当前提供商进行重试
 	        for (let attempt = 0; attempt < retryCount; attempt++) {
             // 同一 attempt 只记一次：在流真正结束（成功/失败/取消）时落分，而非首包时
-            const outcomeRecorder = createAttemptOutcomeRecorder(options?.channelContext);
+            const outcomeRecorder = createAttemptOutcomeRecorder(attemptChannelContext);
 	            try {
                 log.debug(`开始尝试: 提供商: ${provider.name} 模型: ${selectedModel} 尝试次数: ${attempt + 1} / ${retryCount}`, {
                     username: options?.username?.trim() || '匿名用户',
