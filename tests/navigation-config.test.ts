@@ -33,6 +33,7 @@ describe('navigation config', () => {
       '/magic-tea-party',
       '/me',
       '/badge-manager',
+      '/character-report-analysis',
       '/redeem',
       '/password-recovery',
       '/pvp',
@@ -85,6 +86,7 @@ describe('navigation config', () => {
     expect(getNavGroupForPath('/character-manager')?.id).toBe('character');
     expect(getNavGroupForPath('/me')?.id).toBe('character');
     expect(getNavGroupForPath('/sublimation')?.id).toBe('character');
+    expect(getNavGroupForPath('/character-report-analysis')?.id).toBe('character');
 
     expect(getNavGroupForPath('/encyclopedia/site-guide')?.id).toBe('knowledge');
     expect(getTopbarCoverage('/ranking')).toEqual({ isCovered: true, activeGroupId: 'battle' });

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, isNotNull, isNull, like, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, exists, gte, isNotNull, isNull, like, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
 import { battleReportGenerationCombatants, battleReportGenerations, largeObjects } from '@/lib/db/schema';
 
@@ -6,6 +6,7 @@ export type BattleReportGenerationStatus = 'completed' | 'aborted' | 'failed';
 export type BattleReportGenerationMode = 'stream' | 'non-stream';
 export type BattleReportGenerationListSort = 'started_at_desc' | 'started_at_asc';
 export type BattleReportPublicListSort = 'published_at_desc' | 'published_at_asc';
+export type BattleReportCharacterAnalysisSort = 'started_at_desc' | 'started_at_asc';
 
 export type BattleReportGenerationsListFilter = {
   status?: BattleReportGenerationStatus;
@@ -21,6 +22,13 @@ export type BattleReportPublicListFilter = {
   sort?: BattleReportPublicListSort;
 };
 
+export type BattleReportCharacterAnalysisFilter = {
+  fromIso?: string;
+  toIso?: string;
+  uploaderUsername?: string;
+  sort?: BattleReportCharacterAnalysisSort;
+};
+
 export type PublicBattleReportKDRow = {
   generationId: string;
   startedAt: string;
@@ -28,6 +36,17 @@ export type PublicBattleReportKDRow = {
   username: string | null;
   winner: string | null;
   combatantName: string;
+};
+
+export type BattleReportCharacterAnalysisRow = {
+  generationId: string;
+  startedAt: string;
+  username: string | null;
+  userId: number | null;
+  mode: string;
+  winner: string | null;
+  headline: string | null;
+  note: string | null;
 };
 
 export type BattleReportGenerationInsert = {
@@ -751,4 +770,130 @@ export const listPublicBattleReportKDRows = async (
     winner: row.winner,
     combatantName: row.combatantName,
   }));
+};
+
+const buildCharacterAnalysisExistsCondition = (db: AppDrizzleDb, dataCardId: string): SQL => {
+  const trimmed = dataCardId.trim();
+  return exists(
+    db
+      .select({ one: sql<number>`1` })
+      .from(battleReportGenerationCombatants)
+      .where(and(
+        eq(battleReportGenerationCombatants.generationId, battleReportGenerations.id),
+        eq(battleReportGenerationCombatants.dataCardId, trimmed),
+      )),
+  );
+};
+
+const buildCharacterAnalysisConditions = (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  filter?: BattleReportCharacterAnalysisFilter,
+): SQL[] => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) {
+    return [];
+  }
+
+  const conditions: SQL[] = [
+    eq(battleReportGenerations.status, 'completed'),
+    buildCharacterAnalysisExistsCondition(db, safeCardId),
+  ];
+
+  const fromIso = typeof filter?.fromIso === 'string' ? filter.fromIso.trim() : '';
+  if (fromIso) {
+    conditions.push(gte(battleReportGenerations.startedAt, fromIso));
+  }
+
+  const toIso = typeof filter?.toIso === 'string' ? filter.toIso.trim() : '';
+  if (toIso) {
+    conditions.push(lte(battleReportGenerations.startedAt, toIso));
+  }
+
+  const uploaderUsername = typeof filter?.uploaderUsername === 'string' ? filter.uploaderUsername.trim() : '';
+  if (uploaderUsername) {
+    conditions.push(eq(battleReportGenerations.username, uploaderUsername));
+  }
+
+  return conditions;
+};
+
+export const countBattleReportGenerationsByCharacterAnalysis = async (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  filter?: BattleReportCharacterAnalysisFilter,
+): Promise<number> => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) return 0;
+
+  const rows = await db
+    .select({ total: count() })
+    .from(battleReportGenerations)
+    .where(and(...buildCharacterAnalysisConditions(db, safeCardId, filter)));
+
+  return Math.max(0, toInt(rows[0]?.total, 0));
+};
+
+export const listBattleReportGenerationsByCharacterAnalysis = async (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  limit: number | null | undefined,
+  offset: number | null | undefined = 0,
+  filter?: BattleReportCharacterAnalysisFilter,
+): Promise<BattleReportCharacterAnalysisRow[]> => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) return [];
+
+  const safeOffset = Math.max(0, Math.floor(typeof offset === 'number' && Number.isFinite(offset) ? offset : 0));
+  const rowsQuery = db
+    .select({
+      generationId: battleReportGenerations.id,
+      startedAt: battleReportGenerations.startedAt,
+      username: battleReportGenerations.username,
+      userId: battleReportGenerations.userId,
+      mode: battleReportGenerations.mode,
+      winner: battleReportGenerations.winner,
+      headline: battleReportGenerations.headline,
+      note: battleReportGenerations.note,
+    })
+    .from(battleReportGenerations)
+    .where(and(...buildCharacterAnalysisConditions(db, safeCardId, filter)))
+    .orderBy(filter?.sort === 'started_at_asc' ? asc(battleReportGenerations.startedAt) : desc(battleReportGenerations.startedAt))
+    .offset(safeOffset);
+
+  const safeLimit = typeof limit === 'number' && Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : null;
+  const rows = safeLimit && safeLimit > 0 ? await rowsQuery.limit(safeLimit) : await rowsQuery;
+
+  return rows.map((row) => ({
+    generationId: row.generationId,
+    startedAt: row.startedAt,
+    username: row.username,
+    userId: row.userId,
+    mode: typeof row.mode === 'string' && row.mode.trim() ? row.mode.trim() : '未知模式',
+    winner: row.winner,
+    headline: row.headline,
+    note: row.note,
+  }));
+};
+
+export const listBattleReportCharacterAnalysisUploaders = async (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  filter?: Pick<BattleReportCharacterAnalysisFilter, 'fromIso' | 'toIso'>,
+): Promise<string[]> => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) return [];
+
+  const rows = await db
+    .select({
+      username: battleReportGenerations.username,
+    })
+    .from(battleReportGenerations)
+    .where(and(...buildCharacterAnalysisConditions(db, safeCardId, filter)))
+    .groupBy(battleReportGenerations.username)
+    .orderBy(asc(battleReportGenerations.username));
+
+  return rows
+    .map((row) => (typeof row.username === 'string' ? row.username.trim() : ''))
+    .filter((username) => Boolean(username));
 };

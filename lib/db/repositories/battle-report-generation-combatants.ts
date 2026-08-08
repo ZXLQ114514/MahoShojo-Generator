@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
 import { battleReportGenerationCombatants } from '@/lib/db/schema';
 
@@ -103,6 +103,52 @@ export const listBattleReportGenerationCombatantsByGenerationId = async (
     .from(battleReportGenerationCombatants)
     .where(eq(battleReportGenerationCombatants.generationId, generationId))
     .orderBy(battleReportGenerationCombatants.sortIndex);
+
+  return rows.map((row) => ({
+    generation_id: row.generationId,
+    sort_index: toInt(row.sortIndex, 0),
+    name: row.name,
+    type: typeof row.type === 'string' ? row.type : null,
+    template_id: typeof row.templateId === 'string' ? row.templateId : null,
+    is_native: toIntOrNull(row.isNative),
+    is_preset: toIntOrNull(row.isPreset),
+    team_id: toIntOrNull(row.teamId),
+    character_guidance: typeof row.characterGuidance === 'string' ? row.characterGuidance : null,
+    data_card_id: typeof row.dataCardId === 'string' ? row.dataCardId : null,
+    data_card_updated_at: typeof row.dataCardUpdatedAt === 'string' ? row.dataCardUpdatedAt : null,
+    size_chars: toIntOrNull(row.sizeChars),
+    size_bytes: toIntOrNull(row.sizeBytes),
+    created_at: row.createdAt,
+  }));
+};
+
+export const listBattleReportGenerationCombatantsByGenerationIds = async (
+  db: AppDrizzleDb,
+  generationIds: string[],
+): Promise<BattleReportGenerationCombatantDbRow[]> => {
+  const safeIds = [...new Set(generationIds.map((id) => id.trim()).filter(Boolean))];
+  if (safeIds.length === 0) return [];
+
+  const rows = await db
+    .select({
+      generationId: battleReportGenerationCombatants.generationId,
+      sortIndex: battleReportGenerationCombatants.sortIndex,
+      name: battleReportGenerationCombatants.name,
+      type: battleReportGenerationCombatants.type,
+      templateId: battleReportGenerationCombatants.templateId,
+      isNative: battleReportGenerationCombatants.isNative,
+      isPreset: battleReportGenerationCombatants.isPreset,
+      teamId: battleReportGenerationCombatants.teamId,
+      characterGuidance: battleReportGenerationCombatants.characterGuidance,
+      dataCardId: battleReportGenerationCombatants.dataCardId,
+      dataCardUpdatedAt: battleReportGenerationCombatants.dataCardUpdatedAt,
+      sizeChars: battleReportGenerationCombatants.sizeChars,
+      sizeBytes: battleReportGenerationCombatants.sizeBytes,
+      createdAt: battleReportGenerationCombatants.createdAt,
+    })
+    .from(battleReportGenerationCombatants)
+    .where(inArray(battleReportGenerationCombatants.generationId, safeIds))
+    .orderBy(battleReportGenerationCombatants.generationId, battleReportGenerationCombatants.sortIndex);
 
   return rows.map((row) => ({
     generation_id: row.generationId,
