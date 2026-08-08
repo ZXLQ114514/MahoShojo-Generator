@@ -26,6 +26,12 @@ vi.mock('@/components/me/MeRouteProviders', () => ({
   },
 }));
 
+vi.mock('@/components/character/CharacterReportAnalysisPage', () => ({
+  CharacterReportAnalysisPage: function CharacterReportAnalysisPageMock() {
+    return <main data-page="character-report-analysis">角色战报分析</main>;
+  },
+}));
+
 describe('character domain App Router pages', () => {
   test('character manager route renders migrated client page and metadata', async () => {
     const { default: CharacterManagerRoute, metadata } = await import('@/app/character-manager/page');
@@ -66,5 +72,16 @@ describe('character domain App Router pages', () => {
       description: '查看战报记录、PVP 战绩与个人设置',
     });
     expect(html).toContain('data-page="me"');
+  });
+
+  test('character report analysis route renders migrated client page and metadata', async () => {
+    const { default: CharacterReportAnalysisRoute, metadata } = await import('@/app/character-report-analysis/page');
+    const html = renderToStaticMarkup(<CharacterReportAnalysisRoute />);
+
+    expect(metadata).toMatchObject({
+      title: '角色战报分析 - MahoShojo Generator',
+      description: '统计当前账号的角色卡关联战报，并按时间、上传人和样本数量生成分析结论。',
+    });
+    expect(html).toContain('data-page="character-report-analysis"');
   });
 });

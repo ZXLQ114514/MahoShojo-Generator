@@ -5,6 +5,7 @@ export type BattleReportGenerationStatus = 'completed' | 'aborted' | 'failed';
 export type BattleReportGenerationMode = 'stream' | 'non-stream';
 export type BattleReportGenerationListSort = 'started_at_desc' | 'started_at_asc';
 export type BattleReportPublicListSort = 'published_at_desc' | 'published_at_asc';
+export type BattleReportCharacterAnalysisSort = 'started_at_desc' | 'started_at_asc';
 
 export type BattleReportGenerationsListFilter = {
   status?: BattleReportGenerationStatus;
@@ -18,6 +19,13 @@ export type BattleReportGenerationsListFilter = {
 export type BattleReportPublicListFilter = {
   titleQuery?: string;
   sort?: BattleReportPublicListSort;
+};
+
+export type BattleReportCharacterAnalysisFilter = {
+  fromIso?: string;
+  toIso?: string;
+  uploaderUsername?: string;
+  sort?: BattleReportCharacterAnalysisSort;
 };
 
 export interface BattleReportGenerationInsert {
@@ -124,6 +132,17 @@ export interface BattleReportGenerationRowLite {
   updated_at: string;
 }
 
+export interface BattleReportCharacterAnalysisRow {
+  generationId: string;
+  startedAt: string;
+  username: string | null;
+  userId: number | null;
+  mode: string | null;
+  winner: string | null;
+  headline: string | null;
+  note: string | null;
+}
+
 export type BattleReportCountsByStatus = {
   total: number;
   completed: number;
@@ -202,6 +221,23 @@ type BattleReportGenerationsRepoBundle = {
     offset: number,
     filter?: BattleReportPublicListFilter,
   ) => Promise<BattleReportGenerationRowLite[]>;
+  countBattleReportGenerationsByCharacterAnalysis: (
+    db: unknown,
+    dataCardId: string,
+    filter?: BattleReportCharacterAnalysisFilter,
+  ) => Promise<number>;
+  listBattleReportGenerationsByCharacterAnalysis: (
+    db: unknown,
+    dataCardId: string,
+    limit: number | null | undefined,
+    offset?: number | null,
+    filter?: BattleReportCharacterAnalysisFilter,
+  ) => Promise<BattleReportCharacterAnalysisRow[]>;
+  listBattleReportCharacterAnalysisUploaders: (
+    db: unknown,
+    dataCardId: string,
+    filter?: Pick<BattleReportCharacterAnalysisFilter, 'fromIso' | 'toIso'>,
+  ) => Promise<string[]>;
 };
 
 const readBattleReportGenerationsRepoBundle = async (): Promise<BattleReportGenerationsRepoBundle | null> => {
@@ -227,6 +263,9 @@ const readBattleReportGenerationsRepoBundle = async (): Promise<BattleReportGene
       updateBattleReportGenerationPublication: repo.updateBattleReportGenerationPublication as BattleReportGenerationsRepoBundle['updateBattleReportGenerationPublication'],
       updateBattleReportGenerationNote: repo.updateBattleReportGenerationNote as BattleReportGenerationsRepoBundle['updateBattleReportGenerationNote'],
       listPublicBattleReportGenerationsLite: repo.listPublicBattleReportGenerationsLite as BattleReportGenerationsRepoBundle['listPublicBattleReportGenerationsLite'],
+      countBattleReportGenerationsByCharacterAnalysis: repo.countBattleReportGenerationsByCharacterAnalysis as BattleReportGenerationsRepoBundle['countBattleReportGenerationsByCharacterAnalysis'],
+      listBattleReportGenerationsByCharacterAnalysis: repo.listBattleReportGenerationsByCharacterAnalysis as BattleReportGenerationsRepoBundle['listBattleReportGenerationsByCharacterAnalysis'],
+      listBattleReportCharacterAnalysisUploaders: repo.listBattleReportCharacterAnalysisUploaders as BattleReportGenerationsRepoBundle['listBattleReportCharacterAnalysisUploaders'],
     };
   } catch {
     return null;
@@ -468,6 +507,50 @@ export async function getPublicBattleReportGenerations(
     return await bundle.listPublicBattleReportGenerationsLite(bundle.db, limit, offset, filter);
   } catch (error) {
     console.error('读取公开战报失败:', error);
+    return [];
+  }
+}
+
+export async function countBattleReportGenerationsByCharacterAnalysis(
+  dataCardId: string,
+  filter?: BattleReportCharacterAnalysisFilter,
+): Promise<number> {
+  try {
+    const bundle = await readBattleReportGenerationsRepoBundle();
+    if (!bundle) return 0;
+    return await bundle.countBattleReportGenerationsByCharacterAnalysis(bundle.db, dataCardId, filter);
+  } catch (error) {
+    console.error('统计角色战报分析数量失败:', error);
+    return 0;
+  }
+}
+
+export async function getBattleReportGenerationsByCharacterAnalysis(
+  dataCardId: string,
+  limit: number | null | undefined,
+  offset = 0,
+  filter?: BattleReportCharacterAnalysisFilter,
+): Promise<BattleReportCharacterAnalysisRow[]> {
+  try {
+    const bundle = await readBattleReportGenerationsRepoBundle();
+    if (!bundle) return [];
+    return await bundle.listBattleReportGenerationsByCharacterAnalysis(bundle.db, dataCardId, limit, offset, filter);
+  } catch (error) {
+    console.error('读取角色战报分析记录失败:', error);
+    return [];
+  }
+}
+
+export async function listBattleReportCharacterAnalysisUploaders(
+  dataCardId: string,
+  filter?: Pick<BattleReportCharacterAnalysisFilter, 'fromIso' | 'toIso'>,
+): Promise<string[]> {
+  try {
+    const bundle = await readBattleReportGenerationsRepoBundle();
+    if (!bundle) return [];
+    return await bundle.listBattleReportCharacterAnalysisUploaders(bundle.db, dataCardId, filter);
+  } catch (error) {
+    console.error('读取角色战报分析上传人失败:', error);
     return [];
   }
 }
