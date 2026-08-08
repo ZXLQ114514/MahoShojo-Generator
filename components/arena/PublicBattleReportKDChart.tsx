@@ -45,6 +45,10 @@ export function PublicBattleReportKDChart() {
   }, []);
 
   useEffect(() => {
+    setIsCollapsed(isMobile);
+  }, [isMobile]);
+
+  useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams();
     if (from) params.set('from', from);
@@ -116,7 +120,7 @@ export function PublicBattleReportKDChart() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 rounded-xl border border-white/10 bg-slate-900/80 p-4 md:grid-cols-[repeat(3,minmax(0,1fr))_auto] md:items-end">
+      <div className="mt-6 grid gap-3 rounded-xl border border-white/10 bg-slate-900/80 p-4 sm:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_auto] xl:items-end">
         <label className="text-xs font-medium text-slate-300">开始日期<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-sm text-white [color-scheme:dark]" /></label>
         <label className="text-xs font-medium text-slate-300">结束日期<input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-sm text-white [color-scheme:dark]" /></label>
         <label className="min-w-0 text-xs font-medium text-slate-300">上传人<select value={username} onChange={(event) => setUsername(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-sm text-white"><option value="">全部上传人</option>{(payload.uploaders ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
@@ -139,7 +143,7 @@ export function PublicBattleReportKDChart() {
         </div>
         <div id="public-battle-kd-chart-details" hidden={isCollapsed} className="mt-6 space-y-6">
           <div className="flex flex-wrap gap-x-4 gap-y-2 px-2 text-xs text-slate-300">{chartNames.map((name, index) => <span key={name} className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[index] }} />{name}</span>)}</div>
-          <div className="grid gap-3 md:hidden">{summaryCards.map((row) => <article key={row.name} className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-200"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} /><h3 className="truncate font-semibold text-white">{row.name}</h3></div><p className="mt-1 text-xs text-slate-400">有效对局 {row.matches}</p></div><div className="text-right"><div className="text-xs text-slate-400">K/D</div><div className="text-lg font-bold text-indigo-300">{formatKd(row.kd)}</div></div></div><dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div className="rounded-lg bg-slate-950/70 p-3"><dt className="text-slate-400">击杀</dt><dd className="mt-1 text-sm font-semibold text-emerald-300">{row.kills}</dd></div><div className="rounded-lg bg-slate-950/70 p-3"><dt className="text-slate-400">死亡</dt><dd className="mt-1 text-sm font-semibold text-rose-300">{row.deaths}</dd></div></dl></article>)}</div>
+          <div className="grid gap-3 sm:grid-cols-2 md:hidden">{summaryCards.map((row) => <article key={row.name} className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-200"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} /><h3 className="truncate font-semibold text-white">{row.name}</h3></div><p className="mt-1 text-xs text-slate-400">有效对局 {row.matches}</p></div><div className="text-right"><div className="text-xs text-slate-400">K/D</div><div className="text-lg font-bold text-indigo-300">{formatKd(row.kd)}</div></div></div><dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div className="rounded-lg bg-slate-950/70 p-3"><dt className="text-slate-400">击杀</dt><dd className="mt-1 text-sm font-semibold text-emerald-300">{row.kills}</dd></div><div className="rounded-lg bg-slate-950/70 p-3"><dt className="text-slate-400">死亡</dt><dd className="mt-1 text-sm font-semibold text-rose-300">{row.deaths}</dd></div></dl></article>)}</div>
           <div className="hidden overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 md:block"><table className="w-full min-w-[620px] text-left text-sm"><thead className="bg-slate-800 text-xs uppercase tracking-wide text-slate-300"><tr><th className="px-4 py-3">角色</th><th className="px-4 py-3">K/D</th><th className="px-4 py-3">击杀</th><th className="px-4 py-3">死亡</th><th className="px-4 py-3">有效对局</th></tr></thead><tbody className="divide-y divide-slate-800">{summary.map((row) => <tr key={row.name} className="text-slate-200"><td className="px-4 py-3 font-semibold text-white">{row.name}</td><td className="px-4 py-3 font-bold text-indigo-300">{formatKd(row.kd)}</td><td className="px-4 py-3 text-emerald-300">{row.kills}</td><td className="px-4 py-3 text-rose-300">{row.deaths}</td><td className="px-4 py-3">{row.matches}</td></tr>)}</tbody></table></div>
         </div>
       </> : null}
