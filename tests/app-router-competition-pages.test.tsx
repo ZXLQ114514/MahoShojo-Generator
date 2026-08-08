@@ -29,6 +29,12 @@ vi.mock('@/components/arena/ArenaPage', () => ({
   },
 }));
 
+vi.mock('@/components/arena/PublicBattleReportsPage', () => ({
+  PublicBattleReportsPage: function PublicBattleReportsPageMock() {
+    return <main data-page="arena-reports">公开战报展览</main>;
+  },
+}));
+
 vi.mock('@/components/arena-lite/BattleLitePage', () => ({
   BattleLitePage: function BattleLitePageMock() {
     return <main data-page="battle">简洁竞技场</main>;
@@ -113,6 +119,16 @@ describe('competition domain App Router pages', () => {
     });
   });
 
+  test('arena-reports route renders migrated page with metadata', async () => {
+    const { default: ArenaReportsRoute, metadata: arenaReportsMetadata } = await import('@/app/arena-reports/page');
+
+    expect(renderToStaticMarkup(<ArenaReportsRoute />)).toContain('data-page="arena-reports"');
+    expect(arenaReportsMetadata).toMatchObject({
+      title: '公开战报展览 - MahoShojo Generator',
+      description: '浏览公开且通过内容检查的竞技场战斗记录。',
+    });
+  });
+
   test('ranking, sublimation, challenge and investigation routes render migrated pages', async () => {
     const { default: RankingRoute, metadata: rankingMetadata } = await import('@/app/ranking/page');
     const { default: SublimationRoute, metadata: sublimationMetadata } = await import('@/app/sublimation/page');
@@ -160,6 +176,7 @@ describe('competition domain App Router pages', () => {
       'app/battle/page.tsx',
       'app/arena/page.tsx',
       'app/arena-stream/page.tsx',
+      'app/arena-reports/page.tsx',
       'app/ranking/page.tsx',
       'app/sublimation/page.tsx',
       'app/challenge/page.tsx',
@@ -169,6 +186,7 @@ describe('competition domain App Router pages', () => {
       'app/arrested/page.tsx',
       'components/competition/BattleRouteProviders.tsx',
       'components/competition/ArenaRouteProviders.tsx',
+      'components/arena/PublicBattleReportsPage.tsx',
       'components/competition/RankingRouteProviders.tsx',
       'components/competition/PvpRouteProviders.tsx',
       'components/competition/PvpRoomRouteProviders.tsx',
