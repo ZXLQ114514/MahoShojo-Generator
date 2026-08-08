@@ -4,10 +4,24 @@ import {
   getPublicBattleReportGenerations,
 } from '@/lib/database/battle-report-generations';
 import { getBattleReportGenerationCombatantsByGenerationId } from '@/lib/database/battle-report-generation-combatants';
+import { collectVisibleRecords } from '@/lib/arena/public-battle-report-pagination';
 import { loadBattleReportGenerationOutputText } from '@/lib/arena/battle-report-record-utils';
 import { hydrateBattleReportCardFromGenerationRecord } from '@/lib/arena/battle-report-card-fallback';
 import { applyShieldWords } from '@/lib/shield-word-filter';
 import { quickCheck } from '@/lib/sensitive-word-filter';
+
+type PublicBattleReportSummary = {
+  id: string;
+  publicSince: string | null;
+  startedAt: string;
+  headline: string | null;
+  winner: string | null;
+  username: string | null;
+  note: string | null;
+  mode: string | null;
+  scenarioTitle: string | null;
+  excerpt: string;
+};
 
 const json = (payload: unknown, status = 200): Response => new Response(JSON.stringify(payload), {
   status,
@@ -45,6 +59,47 @@ const readSafeOutput = async (record: Awaited<ReturnType<typeof getBattleReportG
   const sensitiveResult = await quickCheck(`${record.note ?? ''}\n${text}`);
   if (sensitiveResult.hasSensitiveWords) return null;
   return text;
+};
+
+const buildPublicBattleReportSummary = async (
+  record: Awaited<ReturnType<typeof getBattleReportGenerationByIdLite>>,
+): Promise<PublicBattleReportSummary | null> => {
+  if (!record || record.is_public !== 1 || record.status !== 'completed' || !isArenaRecord(record.endpoint, record.pvp_match_id)) {
+    return null;
+  }
+
+  const safeOutput = await readSafeOutput(record);
+  if (!safeOutput) return null;
+
+  const hydrated = await hydrateBattleReportCardFromGenerationRecord({
+    generationMode: record.generation_mode,
+    endpoint: record.endpoint,
+    mode: record.mode,
+    scenarioTitle: record.scenario_title,
+    headline: record.headline,
+    winner: record.winner,
+    outputPreview: safeOutput,
+    aiModel: record.ai_model,
+    promptTokens: record.prompt_tokens,
+    completionTokens: record.completion_tokens,
+    totalTokens: record.total_tokens,
+    cachedTokens: null,
+    reasoningTokens: null,
+  });
+
+  const readableExcerpt = (hydrated.liveBody || hydrated.report.article.body || safeOutput).trim();
+  return {
+    id: record.id,
+    publicSince: record.public_since,
+    startedAt: record.started_at,
+    headline: record.headline,
+    winner: record.winner,
+    username: record.username,
+    note: record.note,
+    mode: record.mode,
+    scenarioTitle: record.scenario_title,
+    excerpt: readableExcerpt.slice(0, 280),
+  };
 };
 
 export async function appRouteHandler(req: Request): Promise<Response> {
@@ -102,42 +157,14 @@ export async function appRouteHandler(req: Request): Promise<Response> {
     const offset = clampInt(url.searchParams.get('offset'), 0, 0, 100_000);
     const titleQuery = (url.searchParams.get('q') ?? '').trim().slice(0, 120);
     const sort = url.searchParams.get('sort') === 'published_at_asc' ? 'published_at_asc' : 'published_at_desc';
-    const rows = await getPublicBattleReportGenerations(limit, offset, { titleQuery, sort });
-    const records = [];
-    for (const record of rows) {
-      if (record.is_public !== 1 || record.status !== 'completed' || !isArenaRecord(record.endpoint, record.pvp_match_id)) continue;
-      const safeOutput = await readSafeOutput(record);
-      if (!safeOutput) continue;
-      const hydrated = await hydrateBattleReportCardFromGenerationRecord({
-        generationMode: record.generation_mode,
-        endpoint: record.endpoint,
-        mode: record.mode,
-        scenarioTitle: record.scenario_title,
-        headline: record.headline,
-        winner: record.winner,
-        outputPreview: safeOutput,
-        aiModel: record.ai_model,
-        promptTokens: record.prompt_tokens,
-        completionTokens: record.completion_tokens,
-        totalTokens: record.total_tokens,
-        cachedTokens: null,
-        reasoningTokens: null,
-      });
-      const readableExcerpt = (hydrated.liveBody || hydrated.report.article.body || safeOutput).trim();
-      records.push({
-        id: record.id,
-        publicSince: record.public_since,
-        startedAt: record.started_at,
-        headline: record.headline,
-        winner: record.winner,
-        username: record.username,
-        note: record.note,
-        mode: record.mode,
-        scenarioTitle: record.scenario_title,
-        excerpt: readableExcerpt.slice(0, 280),
-      });
-    }
-    return json({ success: true, records, page: { limit, offset, hasMore: rows.length === limit } });
+    const page = await collectVisibleRecords({
+      limit,
+      offset,
+      batchLimit: 50,
+      fetchRows: (batchLimit, batchOffset) => getPublicBattleReportGenerations(batchLimit, batchOffset, { titleQuery, sort }),
+      buildRecord: buildPublicBattleReportSummary,
+    });
+    return json({ success: true, records: page.records, page: page.page });
   } catch (error) {
     console.error('读取公开战报失败:', error);
     return json({ error: '公开战报暂时不可用' }, 500);

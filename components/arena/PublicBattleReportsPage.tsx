@@ -22,6 +22,15 @@ type PublicReportSummary = {
 
 type PublicReportDetail = PublicBattleReport;
 
+type PublicReportsPagePayload = {
+  records?: PublicReportSummary[];
+  page?: {
+    hasMore?: boolean;
+    nextOffset?: number | null;
+  };
+  error?: string;
+};
+
 const formatDate = (value: string | null | undefined): string => {
   if (!value) return '暂无时间';
   const date = new Date(value);
@@ -40,6 +49,9 @@ export function PublicBattleReportsPage() {
   const [selected, setSelected] = useState<PublicReportDetail | null>(null);
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
+  const [pageHistory, setPageHistory] = useState<number[]>([]);
+  const [pageNextOffset, setPageNextOffset] = useState<number | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -53,20 +65,22 @@ export function PublicBattleReportsPage() {
       const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
       if (query.trim()) params.set('q', query.trim());
       const response = await fetch(`/api/arena/public-reports?${params.toString()}`, { cache: 'no-store' });
-      const payload = await response.json() as { records?: PublicReportSummary[]; page?: { hasMore?: boolean }; error?: string };
+      const payload = await response.json() as PublicReportsPagePayload;
       if (!response.ok) throw new Error(payload.error || `加载失败（${response.status}）`);
       setRecords(Array.isArray(payload.records) ? payload.records : []);
       setHasMore(payload.page?.hasMore === true);
+      setPageNextOffset(typeof payload.page?.nextOffset === 'number' ? payload.page.nextOffset : null);
     } catch (loadError) {
       setRecords([]);
       setHasMore(false);
+      setPageNextOffset(null);
       setError(loadError instanceof Error ? loadError.message : '公开战报加载失败');
     } finally {
       setLoading(false);
     }
   }, [offset, query]);
 
-  useEffect(() => { void loadReports(); }, [loadReports]);
+  useEffect(() => { void loadReports(); }, [loadReports, refreshKey]);
 
   const openReport = async (id: string) => {
     setDetailLoading(true);
@@ -81,6 +95,26 @@ export function PublicBattleReportsPage() {
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const resetPaging = () => {
+    setPageHistory([]);
+    setPageNextOffset(null);
+    setOffset(0);
+    setRefreshKey((value) => value + 1);
+  };
+
+  const goToNextPage = () => {
+    if (pageNextOffset === null) return;
+    setPageHistory((history) => [...history, offset]);
+    setOffset(pageNextOffset);
+  };
+
+  const goToPreviousPage = () => {
+    const previousOffset = pageHistory[pageHistory.length - 1];
+    if (previousOffset === undefined) return;
+    setPageHistory((history) => history.slice(0, -1));
+    setOffset(previousOffset);
   };
 
   return (
@@ -98,14 +132,14 @@ export function PublicBattleReportsPage() {
         <PublicBattleSummaryPanel />
         <PublicBattleReportKDChart />
 
-        <section className="mb-6 rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-xl backdrop-blur"><form className="flex flex-wrap gap-3" onSubmit={(event) => { event.preventDefault(); setOffset(0); void loadReports(); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索战报标题或情景标题" className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" /><button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">搜索</button></form></section>
+        <section className="mb-6 rounded-xl border border-white/10 bg-slate-950/80 p-4 shadow-xl backdrop-blur"><form className="flex flex-wrap gap-3" onSubmit={(event) => { event.preventDefault(); resetPaging(); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索战报标题或情景标题" className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" /><button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">搜索</button></form></section>
 
         {error ? <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div> : null}
         {loading ? <div className="rounded-xl border border-white/10 bg-slate-950/80 py-16 text-center text-sm text-slate-400">加载中…</div> : null}
         {!loading && records.length === 0 ? <div className="rounded-xl border border-white/10 bg-slate-950/80 py-16 text-center text-sm text-slate-400">暂无公开战报。</div> : null}
         {!loading && records.length > 0 ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{records.map((record) => <button key={record.id} type="button" onClick={() => void openReport(record.id)} className="group rounded-xl border border-slate-700 bg-slate-900/90 p-5 text-left text-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:border-pink-300/40 hover:bg-slate-800/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-300/60"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="inline-flex rounded-full border border-pink-300/20 bg-pink-400/10 px-2 py-1 text-xs font-medium text-pink-200">生成模式：{modeLabels[record.mode || ''] || record.mode || '未知模式'}</span><h2 className="mt-3 line-clamp-2 text-lg font-semibold text-white">{record.headline || '未命名战报'}</h2></div><span className="text-xs text-slate-400 transition group-hover:text-slate-200">查看</span></div>{record.scenarioTitle ? <p className="mt-2 text-xs text-slate-400">情景：{record.scenarioTitle}</p> : null}{record.note ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-pink-200/90">备注：{record.note}</p> : null}<p className="mt-3 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-300">{record.excerpt}</p><div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-700 pt-3 text-xs text-slate-400"><span>胜者：{record.winner || '未解析'}</span><span>上传人：{record.username || '未知用户'}</span><span>公开于 {formatDate(record.publicSince)}</span></div></button>)}</div> : null}
 
-        <div className="mt-6 flex justify-end gap-2"><button type="button" disabled={offset === 0 || loading} onClick={() => setOffset((value) => Math.max(0, value - pageSize))} className="rounded border border-white/20 bg-slate-950/70 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-40">上一页</button><button type="button" disabled={!hasMore || loading} onClick={() => setOffset((value) => value + pageSize)} className="rounded border border-white/20 bg-slate-950/70 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-40">下一页</button></div>
+        <div className="mt-6 flex justify-end gap-2"><button type="button" disabled={pageHistory.length === 0 || loading} onClick={goToPreviousPage} className="rounded border border-white/20 bg-slate-950/70 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-40">上一页</button><button type="button" disabled={!hasMore || loading || pageNextOffset === null} onClick={goToNextPage} className="rounded border border-white/20 bg-slate-950/70 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-40">下一页</button></div>
       </div>
 
       {selected ? <PublicBattleReportViewer report={selected} formatDate={formatDate} modeLabel={modeLabels[selected.mode || ''] || selected.mode || '竞技场战报'} onClose={() => setSelected(null)} /> : null}
