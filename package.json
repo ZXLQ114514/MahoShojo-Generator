@@ -7,7 +7,7 @@
         "dev": "next dev --turbopack",
         "dev:pretty": "bash -lc 'if command -v pino-pretty >/dev/null 2>&1; then next dev --turbopack | pino-pretty; else echo \"[dev:pretty] pino-pretty 未安装，回退到原始日志输出\" >&2; next dev --turbopack; fi'",
         "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
-        "build": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\" && next build",
+        "build": "next build",
         "check:naming": "node scripts/check-naming-conventions.mjs --report-only",
         "check:naming:strict": "node scripts/check-naming-conventions.mjs",
         "check:wrangler:d1": "node scripts/check-wrangler-d1-config.mjs",
@@ -26,7 +26,8 @@
         "db:status:remote:prod": "node scripts/check-wrangler-d1-config.mjs && node scripts/d1-release-status.mjs --database DB --remote --env production",
         "db:status:remote:prod:ready": "node scripts/check-wrangler-d1-config.mjs && node scripts/d1-release-status.mjs --database DB --remote --env production --require-ready",
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "build:clean": "pnpm run clean:next && pnpm run build"
     },
     "dependencies": {
         "@ai-sdk/deepseek": "^2.0.35",
