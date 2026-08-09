@@ -12,7 +12,8 @@ import { buildStructuredJsonInstructionFromZodSchema, parseStructuredJsonWithSch
 import { classifySuccess, classifyOutcome, recordAiChannelOutcome } from "@/lib/ai/availability";
 import { buildReasoningSummary } from "@/lib/ai/reasoning-normalizer";
 import {
-  filterProvidersForModelOverride,
+  isProviderOverrideAttempt,
+  prepareProvidersForModelOverride,
   resolveAttemptChannelContext,
 } from '@/lib/ai/provider-routing';
 import type { AIReasoningEnvelope } from "@/types/ai-reasoning";
@@ -237,32 +238,6 @@ function selectRandomModel(models: string | string[]): string {
 }
 
 /**
- * 展开提供商的多模型配置，为每个模型创建单独的提供商实例
- */
-function expandProviders(providers: AIProvider[]): AIProvider[] {
-  const expandedProviders: AIProvider[] = [];
-
-  providers.forEach(provider => {
-    if (typeof provider.model === 'string') {
-      // 单个模型，直接添加
-      expandedProviders.push(provider);
-    } else if (Array.isArray(provider.model)) {
-      // 多个模型，为每个模型创建单独的提供商实例
-      provider.model.forEach((model, index) => {
-        expandedProviders.push({
-          ...provider,
-          name: `${provider.name}_model_${index + 1}`,
-          model,
-          weight: provider.weight || 1
-        });
-      });
-    }
-  });
-
-  return expandedProviders;
-}
-
-/**
  * 负载均衡策略枚举
  */
 export enum LoadBalanceStrategy {
@@ -318,16 +293,26 @@ export async function generateWithAI<T, I = string>(
     log.info(`优先使用用户自定义提供商: ${options.providerOverride.name}`);
   }
 
-  // 展开多模型配置
-  const expandedProviders = expandProviders(baseProviders);
-
-  // 如果有模型覆盖，记录日志
-  if (generationConfig.modelOverride) {
-    log.info(`使用模型覆盖: ${generationConfig.modelOverride}`);
-  }
-
   // 如果没有指定策略，从配置中读取
   const strategy = options?.loadBalanceStrategy || (config.LOAD_BALANCE_STRATEGY as LoadBalanceStrategy) || LoadBalanceStrategy.RANDOM;
+  // 显式用户供应商使用用户自己的凭据；即使调用方没有传 CUSTOM，
+  // 也不能在失败后回退到服务端供应商。
+  const restrictToFirstProvider = strategy === LoadBalanceStrategy.CUSTOM || Boolean(options?.providerOverride);
+  const strategyProviderCount = restrictToFirstProvider ? 1 : baseProviders.length;
+  const modelOverride = generationConfig.modelOverride?.trim() || undefined;
+  const providersForStrategy = prepareProvidersForModelOverride(baseProviders, modelOverride, {
+    restrictToFirstProvider,
+  });
+
+  if (providersForStrategy.length === 0) {
+    log.error('没有可用的 AI 模型配置');
+    throw new Error('没有可用的 AI 模型配置');
+  }
+
+  // 如果有模型覆盖，记录日志
+  if (modelOverride) {
+    log.info(`使用模型覆盖: ${modelOverride}`);
+  }
 
   let lastError: unknown = null;
   let providersToTry: AIProvider[] = [];
@@ -336,7 +321,7 @@ export async function generateWithAI<T, I = string>(
   switch (strategy) {
     case LoadBalanceStrategy.RANDOM:
       // 使用权重随机选择
-      providersToTry = weightedRandomSelect(expandedProviders);
+      providersToTry = weightedRandomSelect(providersForStrategy);
       log.debug('使用加权随机策略', {
         order: providersToTry.map(p => `${p.name}(${typeof p.model === 'string' ? p.model : 'multi'})`)
       });
@@ -344,10 +329,10 @@ export async function generateWithAI<T, I = string>(
 
     case LoadBalanceStrategy.ROUND_ROBIN:
       // 轮询选择提供商
-      const startIndex = roundRobinCounter % expandedProviders.length;
+      const startIndex = roundRobinCounter % providersForStrategy.length;
       providersToTry = [
-        ...expandedProviders.slice(startIndex),
-        ...expandedProviders.slice(0, startIndex)
+        ...providersForStrategy.slice(startIndex),
+        ...providersForStrategy.slice(0, startIndex)
       ];
       roundRobinCounter++;
       log.debug('使用轮询策略', {
@@ -357,7 +342,7 @@ export async function generateWithAI<T, I = string>(
       break;
     case LoadBalanceStrategy.CUSTOM:
       // 自定义策略：优先使用用户自定义模型，不进行轮询
-      providersToTry = [expandedProviders[0]];
+      providersToTry = [providersForStrategy[0]];
       log.debug('使用自定义策略', {
         order: providersToTry.map(p => `${p.name}(${typeof p.model === 'string' ? p.model : 'multi'})`)
       });
@@ -365,19 +350,17 @@ export async function generateWithAI<T, I = string>(
     case LoadBalanceStrategy.SEQUENTIAL:
     default:
       // 顺序执行（原有逻辑）
-      providersToTry = [...expandedProviders];
+      providersToTry = [...providersForStrategy];
       log.debug('使用顺序策略', {
         order: providersToTry.map(p => `${p.name}(${typeof p.model === 'string' ? p.model : 'multi'})`)
       });
       break;
   }
 
-  const originalProviderCount = providersToTry.length;
-  providersToTry = filterProvidersForModelOverride(providersToTry, generationConfig.modelOverride);
-  if (providersToTry.length < originalProviderCount) {
+  if (modelOverride && providersForStrategy.length < strategyProviderCount) {
     log.info('已跳过不支持当前模型覆盖的供应商', {
-      model: generationConfig.modelOverride,
-      skippedCount: originalProviderCount - providersToTry.length,
+      model: modelOverride,
+      skippedCount: strategyProviderCount - providersForStrategy.length,
     });
   }
 
@@ -397,13 +380,13 @@ export async function generateWithAI<T, I = string>(
     }
 
     const retryCount = provider.retryCount ?? 1;
-    // 从可能的多个模型中选择一个，如果有模型覆盖则使用覆盖的模型
-    const selectedModel = generationConfig.modelOverride || selectRandomModel(provider.model);
+    // 模型覆盖已由供应商规划器规范化并写入 provider.model。
+    const selectedModel = selectRandomModel(provider.model);
     const attemptChannelContext = resolveAttemptChannelContext(
       provider,
       selectedModel,
       options?.channelContext,
-      Boolean(options?.providerOverride && provider.name.startsWith(options.providerOverride.name)),
+      isProviderOverrideAttempt(provider, options?.providerOverride),
     );
     log.info(`开始使用提供商: ${provider.name} 模型: ${selectedModel} 重试次数: ${retryCount}`, {
       username: options?.username?.trim() || '匿名用户',

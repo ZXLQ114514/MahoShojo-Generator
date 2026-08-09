@@ -1,0 +1,280 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type TestProvider = {
+  name: string;
+  apiKey: string;
+  baseUrl: string;
+  model: string | string[];
+  type: 'openai';
+  retryCount?: number;
+  skipProbability?: number;
+};
+
+type MockModel = {
+  providerBaseUrl: string;
+  modelId: string;
+};
+
+const state = vi.hoisted(() => {
+  const providers: TestProvider[] = [];
+  const modelAttempts: Array<{ kind: string; providerBaseUrl: string; modelId: string }> = [];
+
+  const modelFromInput = (model: unknown): MockModel => {
+    const value = model as Partial<MockModel>;
+    return {
+      providerBaseUrl: value.providerBaseUrl ?? '',
+      modelId: value.modelId ?? '',
+    };
+  };
+
+  const recordAttempt = (kind: string, model: unknown) => {
+    const normalized = modelFromInput(model);
+    modelAttempts.push({ kind, ...normalized });
+  };
+
+  return {
+    providers,
+    modelAttempts,
+    recordAttempt,
+    generateObject: vi.fn(async ({ model }: { model: unknown }) => {
+      recordAttempt('object', model);
+      throw new Error('mock upstream failure');
+    }),
+    generateText: vi.fn(async () => ({ text: '{}', usage: {}, finishReason: 'stop' })),
+    streamObject: vi.fn(({ model }: { model: unknown }) => {
+      recordAttempt('stream-object', model);
+      throw new Error('mock upstream failure');
+    }),
+    streamText: vi.fn(({ model }: { model: unknown }) => {
+      recordAttempt('raw-stream', model);
+      throw new Error('mock upstream failure');
+    }),
+    createOpenAI: vi.fn((options: { baseURL?: string }) => {
+      const makeModel = (modelId: string): MockModel => ({
+        providerBaseUrl: options.baseURL ?? '',
+        modelId,
+      });
+      const client = ((modelId: string) => makeModel(modelId)) as ((modelId: string) => MockModel) & {
+        chat: (modelId: string) => MockModel;
+      };
+      client.chat = makeModel;
+      return client;
+    }),
+    createGoogleGenerativeAI: vi.fn(),
+    createDeepSeek: vi.fn(),
+    createAttemptOutcomeRecorder: vi.fn(() => ({
+      recordFromError: vi.fn(),
+      recordSuccess: vi.fn(),
+      recordClassification: vi.fn(),
+      recordFromCancel: vi.fn(),
+      settled: false,
+    })),
+    recordAiChannelOutcome: vi.fn(async () => undefined),
+  };
+});
+
+vi.mock('@/lib/config', () => ({
+  config: {
+    PROVIDERS: state.providers,
+    LOAD_BALANCE_STRATEGY: 'sequential',
+  },
+}));
+
+vi.mock('ai', () => ({
+  generateObject: state.generateObject,
+  generateText: state.generateText,
+  streamObject: state.streamObject,
+  streamText: state.streamText,
+  NoObjectGeneratedError: { isInstance: () => false },
+}));
+
+vi.mock('@ai-sdk/openai', () => ({ createOpenAI: state.createOpenAI }));
+vi.mock('@ai-sdk/google', () => ({ createGoogleGenerativeAI: state.createGoogleGenerativeAI }));
+vi.mock('@ai-sdk/deepseek', () => ({ createDeepSeek: state.createDeepSeek }));
+
+vi.mock('@/lib/logger', () => ({
+  getLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
+vi.mock('@/lib/ai/middleware/provider-fetch', () => ({
+  getProviderFetch: () => fetch,
+}));
+
+vi.mock('@/lib/ai/max-output-tokens', () => ({
+  resolveMaxOutputTokensOption: () => ({}),
+}));
+
+vi.mock('@/lib/ai/availability', () => ({
+  classifySuccess: () => ({ outcome: 'success' }),
+  classifyOutcome: () => ({ outcome: 'failure', errorClass: 'server_error' }),
+  recordAiChannelOutcome: state.recordAiChannelOutcome,
+  createAttemptOutcomeRecorder: state.createAttemptOutcomeRecorder,
+  wrapResponseWithAttemptOutcome: (response: Response) => response,
+  pipeStreamWithAttemptOutcome: (stream: ReadableStream<Uint8Array>) => stream,
+}));
+
+vi.mock('@/lib/ai/utils/error-extraction', () => ({
+  enhanceErrorWithUpstreamMessage: (error: unknown) => error,
+  extractUpstreamErrorMessage: () => 'mock upstream failure',
+}));
+
+vi.mock('@/lib/ai/utils/structured-json', () => ({
+  buildStructuredJsonInstructionFromZodSchema: () => '',
+  parseStructuredJsonWithSchema: () => ({
+    data: {},
+    telemetry: { usedJsonRepair: false, unwrapAttempt: null },
+  }),
+}));
+
+import { generateWithAI, LoadBalanceStrategy as NormalLoadBalanceStrategy } from '@/lib/ai';
+import { generateWithStreamAI as generateWithStructuredStreamAI, LoadBalanceStrategy as StructuredLoadBalanceStrategy } from '@/lib/stream/ai';
+import { generateWithStreamAI as generateWithRawStreamAI, LoadBalanceStrategy as RawLoadBalanceStrategy } from '@/lib/stream/raw-ai';
+
+const provider = (
+  name: string,
+  model: string | string[],
+  baseUrl: string,
+  retryCount = 1,
+): TestProvider => ({
+  name,
+  apiKey: 'test-key',
+  baseUrl,
+  model,
+  type: 'openai',
+  retryCount,
+  skipProbability: 0,
+});
+
+const objectGenerationConfig = {
+  systemPrompt: 'system',
+  temperature: 0,
+  promptBuilder: () => '',
+  schema: {} as never,
+  taskName: 'routing integration test',
+};
+
+const structuredStreamGenerationConfig = {
+  ...objectGenerationConfig,
+};
+
+const resetState = () => {
+  state.providers.splice(0, state.providers.length);
+  state.modelAttempts.splice(0, state.modelAttempts.length);
+  state.generateObject.mockClear();
+  state.generateText.mockClear();
+  state.streamObject.mockClear();
+  state.streamText.mockClear();
+  state.createOpenAI.mockClear();
+  state.createAttemptOutcomeRecorder.mockClear();
+  state.recordAiChannelOutcome.mockClear();
+};
+
+describe('AI provider routing integration', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    resetState();
+  });
+
+  it('normal generation uses one attempt per compatible provider for a model override', async () => {
+    const newApiBaseUrl = 'https://newapi.test/v1';
+    const xemApiBaseUrl = 'https://xemapi.test/v1';
+    state.providers.push(
+      provider('NewAPI_123nhh', ['gpt-5.4', 'gpt-5.5'], newApiBaseUrl, 2),
+      provider('HsnAPI', ['glm-5.2', 'gpt-5.2'], 'https://hsnapi.test/v1'),
+      provider('XemAPI_vip', ['gpt-5.4', 'gpt-5.5'], xemApiBaseUrl),
+    );
+
+    await expect(generateWithAI(null, {
+      ...objectGenerationConfig,
+      modelOverride: 'gpt-5.5',
+    }, { loadBalanceStrategy: NormalLoadBalanceStrategy.SEQUENTIAL })).rejects.toThrow();
+
+    expect(state.modelAttempts).toEqual([
+      { kind: 'object', providerBaseUrl: newApiBaseUrl, modelId: 'gpt-5.5' },
+      { kind: 'object', providerBaseUrl: newApiBaseUrl, modelId: 'gpt-5.5' },
+      { kind: 'object', providerBaseUrl: xemApiBaseUrl, modelId: 'gpt-5.5' },
+    ]);
+  });
+
+  it('structured stream isolates an explicit BYOK provider even with sequential strategy', async () => {
+    const byokBaseUrl = 'https://byok.test/v1';
+    state.providers.push(provider('XemAPI_vip', 'gpt-5.5', 'https://xemapi.test/v1'));
+    const byokProvider = provider('custom-relay', 'vendor/configured-model', byokBaseUrl);
+
+    await expect(generateWithStructuredStreamAI(null, {
+      ...structuredStreamGenerationConfig,
+      modelOverride: 'gpt-5.5',
+    }, {
+      providerOverride: byokProvider,
+      loadBalanceStrategy: StructuredLoadBalanceStrategy.SEQUENTIAL,
+    })).rejects.toThrow();
+
+    expect(state.modelAttempts).toEqual([
+      { kind: 'stream-object', providerBaseUrl: byokBaseUrl, modelId: 'gpt-5.5' },
+    ]);
+  });
+
+  it('normal generation isolates an explicit BYOK provider even with sequential strategy', async () => {
+    const byokBaseUrl = 'https://byok.test/v1';
+    const systemBaseUrl = 'https://xemapi.test/v1';
+    state.providers.push(provider('XemAPI_vip', 'gpt-5.5', systemBaseUrl, 2));
+    const byokProvider = provider('custom-relay', 'gpt-5.5', byokBaseUrl);
+
+    await expect(generateWithAI(null, {
+      ...objectGenerationConfig,
+      modelOverride: 'gpt-5.5',
+    }, {
+      providerOverride: byokProvider,
+      loadBalanceStrategy: NormalLoadBalanceStrategy.SEQUENTIAL,
+    })).rejects.toThrow();
+
+    expect(state.modelAttempts).toEqual([
+      { kind: 'object', providerBaseUrl: byokBaseUrl, modelId: 'gpt-5.5' },
+    ]);
+  });
+
+  it('raw stream isolates an explicit BYOK provider even with sequential strategy', async () => {
+    const byokBaseUrl = 'https://byok.test/v1';
+    const systemBaseUrl = 'https://xemapi.test/v1';
+    state.providers.push(provider('XemAPI_vip', 'gpt-5.5', systemBaseUrl, 2));
+    const byokProvider = provider('custom-relay', 'gpt-5.5', byokBaseUrl);
+
+    await expect(generateWithRawStreamAI({
+      prompt: 'prompt',
+      temperature: 0,
+      modelOverride: 'gpt-5.5',
+    }, {
+      providerOverride: byokProvider,
+      loadBalanceStrategy: RawLoadBalanceStrategy.SEQUENTIAL,
+    })).rejects.toThrow();
+
+    expect(state.modelAttempts).toEqual([
+      { kind: 'raw-stream', providerBaseUrl: byokBaseUrl, modelId: 'gpt-5.5' },
+    ]);
+  });
+
+  it('raw stream keeps an unknown model override fail-open without model-array duplication', async () => {
+    const newApiBaseUrl = 'https://newapi.test/v1';
+    const hsnApiBaseUrl = 'https://hsnapi.test/v1';
+    state.providers.push(
+      provider('NewAPI_123nhh', ['model-a', 'model-b'], newApiBaseUrl),
+      provider('HsnAPI', ['model-c', 'model-d'], hsnApiBaseUrl),
+    );
+
+    await expect(generateWithRawStreamAI({
+      prompt: 'prompt',
+      temperature: 0,
+      modelOverride: 'vendor/unknown-integration-model',
+    }, { loadBalanceStrategy: RawLoadBalanceStrategy.SEQUENTIAL })).rejects.toThrow();
+
+    expect(state.modelAttempts).toEqual([
+      { kind: 'raw-stream', providerBaseUrl: newApiBaseUrl, modelId: 'vendor/unknown-integration-model' },
+      { kind: 'raw-stream', providerBaseUrl: hsnApiBaseUrl, modelId: 'vendor/unknown-integration-model' },
+    ]);
+  });
+});
