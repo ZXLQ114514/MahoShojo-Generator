@@ -2,8 +2,12 @@ import { describe, expect, test } from 'vitest';
 
 import {
   buildContentSecurityPolicy,
+  buildHttpsRedirectUrl,
   buildPermissionsPolicy,
+  buildRequestBrowserSecurityHeaders,
   buildStaticBrowserSecurityHeaders,
+  getRequestHost,
+  getRequestHostname,
   getRequestProtocol,
   shouldRedirectToHttps,
 } from '@/lib/security/browser-headers';
@@ -76,6 +80,63 @@ describe('browser security headers', () => {
     expect(policy).not.toContain('upgrade-insecure-requests');
   });
 
+  test('请求级安全头会自动放过局域网 HTTP，并保留公网 HTTPS 强制策略', () => {
+    const localHeaders = buildRequestBrowserSecurityHeaders(
+      new URL('http://0.0.0.0:3000/character-report-analysis'),
+      new Headers({ host: '10.126.126.1:3000' }),
+      {
+        allowGoogleAnalytics: false,
+        allowTurnstile: true,
+        isProduction: true,
+      },
+    );
+    const localPolicy =
+      localHeaders.find(header => header.key === 'Content-Security-Policy')?.value ?? '';
+
+    expect(localHeaders.some(header => header.key === 'Strict-Transport-Security')).toBe(false);
+    expect(localPolicy).not.toContain('upgrade-insecure-requests');
+    expect(localHeaders).toContainEqual({
+      key: 'X-Content-Type-Options',
+      value: 'nosniff',
+    });
+
+    const publicHeaders = buildRequestBrowserSecurityHeaders(
+      new URL('https://0.0.0.0:3000/character-report-analysis'),
+      new Headers({ host: 'mahoshojo.example.com' }),
+      {
+        allowGoogleAnalytics: false,
+        allowTurnstile: true,
+        isProduction: true,
+      },
+    );
+    const publicPolicy =
+      publicHeaders.find(header => header.key === 'Content-Security-Policy')?.value ?? '';
+
+    expect(publicHeaders).toContainEqual({
+      key: 'Strict-Transport-Security',
+      value: 'max-age=31536000; includeSubDomains',
+    });
+    expect(publicPolicy).toContain('upgrade-insecure-requests');
+
+    const globallyDisabledHeaders = buildRequestBrowserSecurityHeaders(
+      new URL('https://mahoshojo.example.com/character-report-analysis'),
+      new Headers(),
+      {
+        allowGoogleAnalytics: false,
+        allowTurnstile: true,
+        enableHttpsOnlyHeaders: false,
+        isProduction: true,
+      },
+    );
+    const globallyDisabledPolicy =
+      globallyDisabledHeaders.find(header => header.key === 'Content-Security-Policy')?.value ?? '';
+
+    expect(
+      globallyDisabledHeaders.some(header => header.key === 'Strict-Transport-Security'),
+    ).toBe(false);
+    expect(globallyDisabledPolicy).not.toContain('upgrade-insecure-requests');
+  });
+
   test('HTTPS 跳转会尊重代理协议头且放过本地开发地址', () => {
     expect(
       shouldRedirectToHttps(new URL('http://mahoshojo.example.com/free'), new Headers()),
@@ -99,6 +160,13 @@ describe('browser security headers', () => {
     expect(
       shouldRedirectToHttps(new URL('http://26.208.231.39:3000/free'), new Headers()),
     ).toBe(false);
+
+    expect(
+      shouldRedirectToHttps(
+        new URL('http://0.0.0.0:3000/free'),
+        new Headers({ host: 'mahoshojo.example.com' }),
+      ),
+    ).toBe(true);
   });
 
   test('协议识别会优先读取代理透传头', () => {
@@ -115,5 +183,34 @@ describe('browser security headers', () => {
         new Headers({ 'cf-visitor': JSON.stringify({ scheme: 'https' }) }),
       ),
     ).toBe('https');
+  });
+
+  test('主机识别会优先使用客户端 Host，并在缺失或无效时回退 URL', () => {
+    const internalUrl = new URL('http://0.0.0.0:3000/free');
+
+    expect(
+      getRequestHostname(internalUrl, new Headers({ host: '10.126.126.1:3000' })),
+    ).toBe('10.126.126.1');
+    expect(
+      getRequestHostname(internalUrl, new Headers({ host: 'mahoshojo.example.com' })),
+    ).toBe('mahoshojo.example.com');
+    expect(
+      getRequestHost(internalUrl, new Headers({ host: 'mahoshojo.example.com:8443' })),
+    ).toBe('mahoshojo.example.com:8443');
+    expect(
+      buildHttpsRedirectUrl(
+        new URL('http://0.0.0.0:3000/free?tab=latest'),
+        new Headers({ host: 'mahoshojo.example.com' }),
+      ).href,
+    ).toBe('https://mahoshojo.example.com/free?tab=latest');
+    expect(
+      buildHttpsRedirectUrl(
+        new URL('http://0.0.0.0:3000/free'),
+        new Headers({ host: 'mahoshojo.example.com:8443' }),
+      ).href,
+    ).toBe('https://mahoshojo.example.com:8443/free');
+    expect(getRequestHostname(internalUrl, new Headers({ host: 'invalid host' }))).toBe(
+      '0.0.0.0',
+    );
   });
 });

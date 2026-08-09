@@ -154,6 +154,19 @@ export function buildStaticBrowserSecurityHeaders(options: BrowserSecurityHeader
   ];
 }
 
+export function buildRequestBrowserSecurityHeaders(
+  url: URL,
+  headers: Headers,
+  options: BrowserSecurityHeaderOptions,
+): StaticHeader[] {
+  return buildStaticBrowserSecurityHeaders({
+    ...options,
+    enableHttpsOnlyHeaders:
+      options.enableHttpsOnlyHeaders !== false &&
+      !isLocalHostname(getRequestHostname(url, headers)),
+  });
+}
+
 export function isLocalHostname(hostname: string): boolean {
   const normalizedHostname = hostname.toLowerCase();
   return (
@@ -184,7 +197,37 @@ export function getRequestProtocol(url: URL, headers: Headers): string {
   return url.protocol.replace(/:$/, '').toLowerCase();
 }
 
+function parseRequestHost(url: URL, headers: Headers): URL {
+  const host = headers.get('host')?.split(',')[0]?.trim();
+  if (host) {
+    try {
+      return new URL(`http://${host}`);
+    } catch {
+      // ignore malformed Host headers
+    }
+  }
+
+  return new URL(`http://${url.host}`);
+}
+
+export function getRequestHostname(url: URL, headers: Headers): string {
+  return parseRequestHost(url, headers).hostname;
+}
+
+export function getRequestHost(url: URL, headers: Headers): string {
+  return parseRequestHost(url, headers).host;
+}
+
+export function buildHttpsRedirectUrl(url: URL, headers: Headers): URL {
+  const requestHost = parseRequestHost(url, headers);
+  const redirectUrl = new URL(url.href);
+  redirectUrl.protocol = 'https:';
+  redirectUrl.hostname = requestHost.hostname;
+  redirectUrl.port = requestHost.port;
+  return redirectUrl;
+}
+
 export function shouldRedirectToHttps(url: URL, headers: Headers): boolean {
-  if (isLocalHostname(url.hostname)) return false;
+  if (isLocalHostname(getRequestHostname(url, headers))) return false;
   return getRequestProtocol(url, headers) === 'http';
 }

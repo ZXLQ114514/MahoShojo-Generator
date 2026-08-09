@@ -2,19 +2,10 @@ import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
-import { buildStaticBrowserSecurityHeaders } from "./lib/security/browser-headers";
-
 const createNextConfig = (phase: string): NextConfig => {
   if (phase === PHASE_DEVELOPMENT_SERVER) {
     initOpenNextCloudflareForDev();
   }
-
-  const staticSecurityHeaders = buildStaticBrowserSecurityHeaders({
-    allowGoogleAnalytics: Boolean(process.env.NEXT_PUBLIC_GA_ID?.trim()),
-    allowTurnstile: true,
-    enableHttpsOnlyHeaders: process.env.MAHOSHOJO_ENABLE_HTTPS_SECURITY_HEADERS !== 'false',
-    isProduction: process.env.NODE_ENV === 'production',
-  });
 
   return {
     // 图片优化配置（Cloudflare Workers 不支持默认的图片优化）
@@ -53,10 +44,6 @@ const createNextConfig = (phase: string): NextConfig => {
 
     async headers() {
       return [
-        {
-          source: '/:path*',
-          headers: staticSecurityHeaders,
-        },
         {
           source: '/api/:path*',
           headers: [
