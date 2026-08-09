@@ -29,6 +29,19 @@ describe('character report final result parser', () => {
     expect(extractCharacterReportFinalResult({ outputPreview: preview, outputChars: preview.length })).toBe('角色 A 守住了最后一回合。');
   });
 
+  test('流式最终结果会剥离战报系统元数据注释', () => {
+    const preview = [
+      '# 战报',
+      '',
+      '## 最终结果',
+      '角色 A 完成了逆转。',
+      '',
+      '<!-- MAHOSHOJO_ARENA_META {"version":1,"report":{"headline":"战报","winner":"角色 A"}} -->',
+    ].join('\n');
+
+    expect(extractCharacterReportFinalResult({ outputPreview: preview, generationMode: 'stream' })).toBe('角色 A 完成了逆转。');
+  });
+
   test('无目标段落或无效 JSON 返回 null', () => {
     expect(extractCharacterReportFinalResult({ outputPreview: '{"officialReport":' })).toBeNull();
     expect(extractCharacterReportFinalResult({ outputPreview: '# 战报\n\n## 胜利者\n- 角色 A' })).toBeNull();
