@@ -1,4 +1,5 @@
 import { applyShieldWords } from '@/lib/shield-word-filter';
+import { stripAllStreamMetaComments } from '@/lib/arena/stream-meta';
 
 export const CHARACTER_REPORT_FINAL_RESULT_MAX_CHARS = 1200;
 
@@ -89,7 +90,10 @@ export const extractCharacterReportFinalResult = (
   const rawPreview = typeof input.outputPreview === 'string' ? input.outputPreview : '';
   // outputChars 记录原始正文长度；在 trim 之前比较才能避免完整流式正文的首尾换行被误判为截断。
   if (!rawPreview || isTruncatedPreview(rawPreview, input.outputChars)) return null;
-  const preview = rawPreview.trim();
+  // 流式战报可能在正文末尾追加系统元数据注释；它不是最终结果内容，
+  // 也不应作为不可信正文送入客户端或 AI。使用项目统一解析器而不是正则，
+  // 以兼容历史 marker、松散格式和未闭合注释。
+  const preview = stripAllStreamMetaComments(rawPreview).trim();
   if (!preview) return null;
 
   const looksLikeJson = /^\s*[\[{]/.test(preview);
