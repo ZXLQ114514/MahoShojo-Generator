@@ -35,6 +35,10 @@ export type BattleReportGenerationCombatantDbRow = {
   created_at: string;
 };
 
+// D1 currently accepts at most 100 bound parameters per statement. Leave room
+// for future fixed predicates instead of using the entire limit for the IN list.
+const GENERATION_IDS_QUERY_BATCH_SIZE = 90;
+
 const toInt = (value: unknown, fallback = 0): number => {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
   if (!Number.isFinite(n)) return fallback;
@@ -129,41 +133,51 @@ export const listBattleReportGenerationCombatantsByGenerationIds = async (
   const safeIds = [...new Set(generationIds.map((id) => id.trim()).filter(Boolean))];
   if (safeIds.length === 0) return [];
 
-  const rows = await db
-    .select({
-      generationId: battleReportGenerationCombatants.generationId,
-      sortIndex: battleReportGenerationCombatants.sortIndex,
-      name: battleReportGenerationCombatants.name,
-      type: battleReportGenerationCombatants.type,
-      templateId: battleReportGenerationCombatants.templateId,
-      isNative: battleReportGenerationCombatants.isNative,
-      isPreset: battleReportGenerationCombatants.isPreset,
-      teamId: battleReportGenerationCombatants.teamId,
-      characterGuidance: battleReportGenerationCombatants.characterGuidance,
-      dataCardId: battleReportGenerationCombatants.dataCardId,
-      dataCardUpdatedAt: battleReportGenerationCombatants.dataCardUpdatedAt,
-      sizeChars: battleReportGenerationCombatants.sizeChars,
-      sizeBytes: battleReportGenerationCombatants.sizeBytes,
-      createdAt: battleReportGenerationCombatants.createdAt,
-    })
-    .from(battleReportGenerationCombatants)
-    .where(inArray(battleReportGenerationCombatants.generationId, safeIds))
-    .orderBy(battleReportGenerationCombatants.generationId, battleReportGenerationCombatants.sortIndex);
+  const result: BattleReportGenerationCombatantDbRow[] = [];
+  for (let offset = 0; offset < safeIds.length; offset += GENERATION_IDS_QUERY_BATCH_SIZE) {
+    const batchIds = safeIds.slice(offset, offset + GENERATION_IDS_QUERY_BATCH_SIZE);
+    const rows = await db
+      .select({
+        generationId: battleReportGenerationCombatants.generationId,
+        sortIndex: battleReportGenerationCombatants.sortIndex,
+        name: battleReportGenerationCombatants.name,
+        type: battleReportGenerationCombatants.type,
+        templateId: battleReportGenerationCombatants.templateId,
+        isNative: battleReportGenerationCombatants.isNative,
+        isPreset: battleReportGenerationCombatants.isPreset,
+        teamId: battleReportGenerationCombatants.teamId,
+        characterGuidance: battleReportGenerationCombatants.characterGuidance,
+        dataCardId: battleReportGenerationCombatants.dataCardId,
+        dataCardUpdatedAt: battleReportGenerationCombatants.dataCardUpdatedAt,
+        sizeChars: battleReportGenerationCombatants.sizeChars,
+        sizeBytes: battleReportGenerationCombatants.sizeBytes,
+        createdAt: battleReportGenerationCombatants.createdAt,
+      })
+      .from(battleReportGenerationCombatants)
+      .where(inArray(battleReportGenerationCombatants.generationId, batchIds))
+      .orderBy(battleReportGenerationCombatants.generationId, battleReportGenerationCombatants.sortIndex);
 
-  return rows.map((row) => ({
-    generation_id: row.generationId,
-    sort_index: toInt(row.sortIndex, 0),
-    name: row.name,
-    type: typeof row.type === 'string' ? row.type : null,
-    template_id: typeof row.templateId === 'string' ? row.templateId : null,
-    is_native: toIntOrNull(row.isNative),
-    is_preset: toIntOrNull(row.isPreset),
-    team_id: toIntOrNull(row.teamId),
-    character_guidance: typeof row.characterGuidance === 'string' ? row.characterGuidance : null,
-    data_card_id: typeof row.dataCardId === 'string' ? row.dataCardId : null,
-    data_card_updated_at: typeof row.dataCardUpdatedAt === 'string' ? row.dataCardUpdatedAt : null,
-    size_chars: toIntOrNull(row.sizeChars),
-    size_bytes: toIntOrNull(row.sizeBytes),
-    created_at: row.createdAt,
-  }));
+    result.push(...rows.map((row) => ({
+      generation_id: row.generationId,
+      sort_index: toInt(row.sortIndex, 0),
+      name: row.name,
+      type: typeof row.type === 'string' ? row.type : null,
+      template_id: typeof row.templateId === 'string' ? row.templateId : null,
+      is_native: toIntOrNull(row.isNative),
+      is_preset: toIntOrNull(row.isPreset),
+      team_id: toIntOrNull(row.teamId),
+      character_guidance: typeof row.characterGuidance === 'string' ? row.characterGuidance : null,
+      data_card_id: typeof row.dataCardId === 'string' ? row.dataCardId : null,
+      data_card_updated_at: typeof row.dataCardUpdatedAt === 'string' ? row.dataCardUpdatedAt : null,
+      size_chars: toIntOrNull(row.sizeChars),
+      size_bytes: toIntOrNull(row.sizeBytes),
+      created_at: row.createdAt,
+    })));
+  }
+
+  return result.sort((left, right) => {
+    if (left.generation_id < right.generation_id) return -1;
+    if (left.generation_id > right.generation_id) return 1;
+    return left.sort_index - right.sort_index;
+  });
 };
