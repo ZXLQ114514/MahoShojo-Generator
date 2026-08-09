@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { Filter, RotateCcw, Sparkles } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { authStorage } from '@/lib/auth';
+import { AI_PROVIDER_CATALOG } from '@/lib/ai/constants';
 import {
+  type CharacterReportAiSummary,
   type CharacterReportAnalysisResult,
   type CharacterReportOutcome,
 } from '@/lib/arena/character-report-analysis';
@@ -29,6 +31,12 @@ type DataCardsPayload = {
 type AnalysisPayload = {
   success?: boolean;
   analysis?: CharacterReportAnalysisResult;
+  error?: string;
+};
+
+type AiSummaryPayload = {
+  success?: boolean;
+  summary?: CharacterReportAiSummary;
   error?: string;
 };
 
@@ -60,6 +68,8 @@ const OUTCOME_STYLES: Record<CharacterReportOutcome, string> = {
   draw: 'border-amber-300/20 bg-amber-400/10 text-amber-200',
   unknown: 'border-slate-300/20 bg-slate-400/10 text-slate-200',
 };
+
+const SUMMARY_MODEL_OPTIONS = AI_PROVIDER_CATALOG.find((provider) => provider.id === 'system')?.models ?? [];
 
 const formatDateTime = (value: string | null | undefined): string => {
   if (!value) return '暂无';
@@ -104,6 +114,11 @@ export function CharacterReportAnalysisPage() {
   const [analysis, setAnalysis] = useState<CharacterReportAnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [summaryModel, setSummaryModel] = useState('default');
+  const [aiSummary, setAiSummary] = useState<CharacterReportAiSummary | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
+  const aiSummaryRequestRef = useRef(0);
 
   useEffect(() => {
     if (authLoading) return;
@@ -116,6 +131,10 @@ export function CharacterReportAnalysisPage() {
       setAnalysis(null);
       setAnalysisLoading(false);
       setAnalysisError(null);
+      aiSummaryRequestRef.current += 1;
+      setAiSummary(null);
+      setAiSummaryError(null);
+      setAiSummaryLoading(false);
       return;
     }
 
@@ -171,6 +190,10 @@ export function CharacterReportAnalysisPage() {
       setAnalysis(null);
       setAnalysisLoading(false);
       setAnalysisError(null);
+      aiSummaryRequestRef.current += 1;
+      setAiSummary(null);
+      setAiSummaryError(null);
+      setAiSummaryLoading(false);
       return;
     }
 
@@ -183,6 +206,9 @@ export function CharacterReportAnalysisPage() {
 
     setAnalysisLoading(true);
     setAnalysisError(null);
+    aiSummaryRequestRef.current += 1;
+    setAiSummary(null);
+    setAiSummaryError(null);
 
     authStorage.fetch(`/api/me/character-report-analysis?${params.toString()}`, {
       cache: 'no-store',
@@ -220,6 +246,44 @@ export function CharacterReportAnalysisPage() {
     setToDate('');
     setUploaderUsername('');
     setReportLimit('100');
+  };
+
+  const generateAiSummary = async () => {
+    if (!selectedCardId || !analysis || aiSummaryLoading) return;
+    const requestId = aiSummaryRequestRef.current + 1;
+    aiSummaryRequestRef.current = requestId;
+    setAiSummaryLoading(true);
+    setAiSummaryError(null);
+
+    try {
+      const activityHeaders = await authStorage.getActivityHeaders();
+      const response = await authStorage.fetch('/api/me/character-report-analysis/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...activityHeaders },
+        cache: 'no-store',
+        body: JSON.stringify({
+          cardId: selectedCardId,
+          model: summaryModel,
+          filters: {
+            from: fromDate || null,
+            to: toDate || null,
+            uploader: uploaderUsername || null,
+            reportLimit,
+          },
+        }),
+      });
+      const payload = await response.json() as AiSummaryPayload;
+      if (!response.ok || !payload.summary) {
+        throw new Error(payload.error || `生成 AI 总结失败（${response.status}）`);
+      }
+      if (requestId === aiSummaryRequestRef.current) setAiSummary(payload.summary);
+    } catch (error: unknown) {
+      if (requestId === aiSummaryRequestRef.current) {
+        setAiSummaryError(error instanceof Error ? error.message : '生成 AI 总结失败');
+      }
+    } finally {
+      if (requestId === aiSummaryRequestRef.current) setAiSummaryLoading(false);
+    }
   };
 
   const selectedLimitLabel = REPORT_LIMIT_OPTIONS.find((option) => option.value === reportLimit)?.label ?? '最近 100 场';
@@ -480,7 +544,7 @@ export function CharacterReportAnalysisPage() {
                           { label: '匹配战报', value: String(analysis.totalReports), hint: '满足当前筛选条件的总数' },
                           { label: '当前样本', value: String(analysis.includedReports), hint: '本次实际纳入分析的数量' },
                           { label: '胜率', value: formatRate(analysis.winRate), hint: `胜 ${analysis.wins} · 负 ${analysis.losses}` },
-                          { label: 'K/D', value: formatKd(analysis.kd), hint: `击杀 ${analysis.kills} · 死亡 ${analysis.deaths}` },
+                          { label: 'K/D', value: formatKd(analysis.kd), hint: `胜负映射：击杀 ${analysis.kills} · 死亡 ${analysis.deaths}` },
                           { label: '平局', value: String(analysis.draws), hint: '不计入胜率和 K/D' },
                           { label: '未知', value: String(analysis.unknowns), hint: '胜负无法稳定识别' },
                           { label: '首场', value: formatDateOnly(analysis.firstStartedAt), hint: '最早匹配到的战报时间' },
@@ -495,9 +559,97 @@ export function CharacterReportAnalysisPage() {
                       </div>
 
                       <section className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="text-sm font-semibold text-white">战报最终结果</h3>
+                          <span className="text-xs text-slate-400">已读取 {analysis.finalResultCount} / {analysis.includedReports} 场</span>
+                        </div>
+                        {analysis.finalResultCount > 0 ? (
+                          <div className="mt-3 space-y-3">
+                            {analysis.records.filter((record) => Boolean(record.finalResult)).slice(0, 5).map((record) => (
+                              <article key={record.generationId} className="rounded-lg border border-white/10 bg-slate-950/70 p-3">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                                  <span>{formatDateTime(record.startedAt)}</span>
+                                  <span>{getModeLabel(record.mode)}</span>
+                                  <span>上传人：{record.username || '未知'}</span>
+                                </div>
+                                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-200">{record.finalResult}</p>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-slate-400">当前筛选样本没有可读取的最终结果正文。</p>
+                        )}
+                      </section>
+
+                      <section className="rounded-xl border border-indigo-300/20 bg-indigo-950/35 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-indigo-100">
+                            <Sparkles aria-hidden="true" className="h-4 w-4" />
+                            AI 总结
+                          </div>
+                          <div className="flex flex-wrap items-end justify-end gap-2">
+                            <label className="text-left text-xs text-indigo-100">
+                              总结模型
+                              <select
+                                value={summaryModel}
+                                onChange={(event) => setSummaryModel(event.target.value)}
+                                disabled={aiSummaryLoading}
+                                className="mt-1 block min-w-[190px] rounded-lg border border-indigo-200/20 bg-slate-950 px-3 py-2 text-sm text-white"
+                              >
+                                {SUMMARY_MODEL_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={generateAiSummary}
+                              disabled={aiSummaryLoading || !analysis}
+                              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-indigo-200/30 bg-indigo-400/20 px-3 py-2 text-sm font-semibold text-indigo-50 transition hover:bg-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Sparkles aria-hidden="true" className="h-4 w-4" />
+                              {aiSummaryLoading ? '生成中…' : '生成 AI 总结'}
+                            </button>
+                          </div>
+                        </div>
+                        {aiSummaryError ? (
+                          <div className="mt-3 rounded-lg border border-rose-300/30 bg-rose-950/40 px-3 py-2 text-sm text-rose-100">
+                            {aiSummaryError}
+                          </div>
+                        ) : null}
+                        {aiSummary ? (
+                          <div className="mt-4 space-y-4">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-indigo-200/80">
+                              <span>模型：{aiSummary.model}</span>
+                              <span>生成时间：{formatDateTime(aiSummary.generatedAt)}</span>
+                              <span className="break-all">生成键：{aiSummary.generationKey}</span>
+                              {aiSummary.isFallback ? <span className="text-amber-200">部分内容回退到规则总结</span> : null}
+                            </div>
+                            <p className="text-sm leading-7 text-indigo-50">{aiSummary.conclusion}</p>
+                            <div className="grid gap-4 xl:grid-cols-2">
+                              <div>
+                                <h4 className="text-xs font-semibold uppercase tracking-wide text-emerald-200">AI 优势</h4>
+                                <ul className="mt-2 space-y-2 text-sm leading-6 text-emerald-100">
+                                  {aiSummary.strengths.map((item) => <li key={item}>• {item}</li>)}
+                                </ul>
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-semibold uppercase tracking-wide text-rose-200">AI 弱势</h4>
+                                <ul className="mt-2 space-y-2 text-sm leading-6 text-rose-100">
+                                  {aiSummary.weaknesses.map((item) => <li key={item}>• {item}</li>)}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-indigo-100/70">选择模型后点击生成，规则统计总结会始终保留。</p>
+                        )}
+                      </section>
+
+                      <section className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
                         <div className="flex items-center gap-2 text-sm font-semibold text-indigo-200">
                           <Sparkles aria-hidden="true" className="h-4 w-4" />
-                          分析结论
+                          规则统计总结
                         </div>
                         <p className="mt-3 text-sm leading-7 text-slate-200">{analysis.conclusion}</p>
                       </section>

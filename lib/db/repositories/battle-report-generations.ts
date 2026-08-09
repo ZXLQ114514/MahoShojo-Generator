@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, exists, gte, isNotNull, isNull, like, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
-import { battleReportGenerationCombatants, battleReportGenerations, largeObjects } from '@/lib/db/schema';
+import { battleReportGenerationCombatants, battleReportGenerations, largeObjects, pvpMatchPlayers } from '@/lib/db/schema';
 
 export type BattleReportGenerationStatus = 'completed' | 'aborted' | 'failed';
 export type BattleReportGenerationMode = 'stream' | 'non-stream';
@@ -27,6 +27,8 @@ export type BattleReportCharacterAnalysisFilter = {
   toIso?: string;
   uploaderUsername?: string;
   sort?: BattleReportCharacterAnalysisSort;
+  /** 仅用于裁剪战报正文，不影响既有统计范围。 */
+  viewerUserId?: number;
 };
 
 export type PublicBattleReportKDRow = {
@@ -44,9 +46,14 @@ export type BattleReportCharacterAnalysisRow = {
   username: string | null;
   userId: number | null;
   mode: string;
+  generationMode: BattleReportGenerationMode;
   winner: string | null;
   headline: string | null;
   note: string | null;
+  outputPreview: string | null;
+  outputChars: number | null;
+  outputHasSensitiveWords: boolean | null;
+  outputHasShieldWords: boolean | null;
 };
 
 export type BattleReportGenerationInsert = {
@@ -175,6 +182,13 @@ const toIntOrNull = (value: unknown): number | null => {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
   if (!Number.isFinite(n)) return null;
   return Math.trunc(n);
+};
+
+const toBoolOrNull = (value: unknown): boolean | null => {
+  if (value == null) return null;
+  if (value === true || value === 1 || value === '1') return true;
+  if (value === false || value === 0 || value === '0') return false;
+  return null;
 };
 
 const buildWhereForListQuery = (
@@ -818,6 +832,32 @@ const buildCharacterAnalysisConditions = (
   return conditions;
 };
 
+const buildCharacterAnalysisOutputVisibilityCondition = (
+  db: AppDrizzleDb,
+  viewerUserId: number | undefined,
+): SQL => {
+  const safeViewerUserId = typeof viewerUserId === 'number' && Number.isSafeInteger(viewerUserId) && viewerUserId > 0
+    ? viewerUserId
+    : null;
+  if (safeViewerUserId === null) {
+    return sql`0`;
+  }
+
+  return or(
+    eq(battleReportGenerations.userId, safeViewerUserId),
+    eq(battleReportGenerations.isPublic, 1),
+    exists(
+      db
+        .select({ one: sql<number>`1` })
+        .from(pvpMatchPlayers)
+        .where(and(
+          eq(pvpMatchPlayers.matchId, battleReportGenerations.pvpMatchId),
+          eq(pvpMatchPlayers.userId, safeViewerUserId),
+        )),
+    ),
+  ) ?? sql`0`;
+};
+
 export const countBattleReportGenerationsByCharacterAnalysis = async (
   db: AppDrizzleDb,
   dataCardId: string,
@@ -845,6 +885,7 @@ export const listBattleReportGenerationsByCharacterAnalysis = async (
   if (!safeCardId) return [];
 
   const safeOffset = Math.max(0, Math.floor(typeof offset === 'number' && Number.isFinite(offset) ? offset : 0));
+  const outputVisible = buildCharacterAnalysisOutputVisibilityCondition(db, filter?.viewerUserId);
   const rowsQuery = db
     .select({
       generationId: battleReportGenerations.id,
@@ -852,9 +893,15 @@ export const listBattleReportGenerationsByCharacterAnalysis = async (
       username: battleReportGenerations.username,
       userId: battleReportGenerations.userId,
       mode: battleReportGenerations.mode,
+      generationMode: battleReportGenerations.generationMode,
       winner: battleReportGenerations.winner,
       headline: battleReportGenerations.headline,
       note: battleReportGenerations.note,
+      // 角色卡关联并不等于可以读取战报正文。私有正文只对上传者或 PVP 参与者可见。
+      outputPreview: sql<string | null>`CASE WHEN ${outputVisible} THEN ${battleReportGenerations.outputPreview} ELSE NULL END`,
+      outputChars: battleReportGenerations.outputChars,
+      outputHasSensitiveWords: battleReportGenerations.outputHasSensitiveWords,
+      outputHasShieldWords: battleReportGenerations.outputHasShieldWords,
     })
     .from(battleReportGenerations)
     .where(and(...buildCharacterAnalysisConditions(db, safeCardId, filter)))
@@ -870,9 +917,14 @@ export const listBattleReportGenerationsByCharacterAnalysis = async (
     username: row.username,
     userId: row.userId,
     mode: typeof row.mode === 'string' && row.mode.trim() ? row.mode.trim() : '未知模式',
+    generationMode: row.generationMode === 'stream' ? 'stream' : 'non-stream',
     winner: row.winner,
     headline: row.headline,
     note: row.note,
+    outputPreview: row.outputPreview,
+    outputChars: toIntOrNull(row.outputChars),
+    outputHasSensitiveWords: toBoolOrNull(row.outputHasSensitiveWords),
+    outputHasShieldWords: toBoolOrNull(row.outputHasShieldWords),
   }));
 };
 

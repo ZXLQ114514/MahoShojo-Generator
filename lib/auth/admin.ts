@@ -1,6 +1,7 @@
 import { requireAuthUser, type AuthenticatedUser } from '@/lib/auth/server';
 import { getBusinessUserById } from '@/lib/db/repositories/business-users';
 import { getDrizzleDbFromRuntime, type AppDrizzleDb } from '@/lib/db/drizzle';
+import { isSameOriginRequest } from '@/lib/auth/request-security';
 
 export type AdminAuthResult =
   | { user: AuthenticatedUser; db: AppDrizzleDb }
@@ -12,44 +13,8 @@ const json = (payload: unknown, status: number): Response =>
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 
-const readRequestOrigin = (req: Request): string => {
-  const forwardedHost = req.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const host = forwardedHost || req.headers.get('host')?.trim();
-  if (!host) return new URL(req.url).origin;
-
-  const forwardedProto = req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  let protocol = forwardedProto;
-  if (!protocol) {
-    const cfVisitor = req.headers.get('cf-visitor');
-    try {
-      const scheme = cfVisitor ? (JSON.parse(cfVisitor) as { scheme?: unknown }).scheme : null;
-      if (typeof scheme === 'string' && scheme.trim()) protocol = scheme.trim();
-    } catch {
-      // Ignore malformed proxy metadata and fall back to the request URL.
-    }
-  }
-  if (!protocol) protocol = new URL(req.url).protocol.replace(/:$/, '');
-  return `${protocol}://${host}`;
-};
-
-const sameOrigin = (req: Request): boolean => {
-  const requestOrigin = readRequestOrigin(req);
-  const origin = req.headers.get('origin');
-  if (origin && origin !== requestOrigin) return false;
-
-  const referer = req.headers.get('referer');
-  if (referer) {
-    try {
-      if (new URL(referer).origin !== requestOrigin) return false;
-    } catch {
-      return false;
-    }
-  }
-  return true;
-};
-
 export const requireAdminUser = async (req: Request, options: { requireSameOrigin?: boolean } = {}): Promise<AdminAuthResult> => {
-  if (options.requireSameOrigin && !sameOrigin(req)) {
+  if (options.requireSameOrigin && !isSameOriginRequest(req)) {
     return { response: json({ error: '跨站请求被拒绝' }, 403) };
   }
 
