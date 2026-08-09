@@ -2,6 +2,7 @@ import { requireAuthUser, json } from '@/lib/pvp/server';
 import { createBattleReportGenerationRecord, updateBattleReportGenerationPublication } from '@/lib/database/battle-report-generations';
 import { applyShieldWords } from '@/lib/shield-word-filter';
 import { quickCheck } from '@/lib/sensitive-word-filter';
+import { getRuntimeShieldWordRulesSnapshot } from '@/lib/shield-word-runtime';
 
 type BundleChapter = { index: number; title: string; markdown: string };
 const text = (value: unknown, max: number): string => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -31,6 +32,8 @@ export async function appRouteHandler(req: Request): Promise<Response> {
 
   const isPublic = body.isPublic === true || body.isPublic === 'true' || body.isPublic === 1;
   if (isPublic) {
+    const shieldWordSettings = await getRuntimeShieldWordRulesSnapshot();
+    if (!shieldWordSettings.available) return json({ error: '内容安全规则暂不可用，请稍后重试' }, { status: 503 });
     const combined = `${note}\n${output}`;
     if (applyShieldWords(combined).hasShieldWords) return json({ error: '备注或战报正文包含屏蔽词，不能直接公开' }, { status: 422 });
     if ((await quickCheck(combined)).hasSensitiveWords) return json({ error: '备注或战报正文包含敏感内容，不能直接公开' }, { status: 422 });

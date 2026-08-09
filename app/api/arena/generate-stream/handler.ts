@@ -40,6 +40,7 @@ import { createBattleReportGenerationCombatants } from '@/lib/database/battle-re
 import { upsertLargeObjectByOwnerRef } from '@/lib/database/large-objects';
 import { generateUUID } from '@/lib/database/core';
 import { applyShieldWords } from '@/lib/shield-word-filter';
+import { ensureRuntimeShieldWordRules } from '@/lib/shield-word-runtime';
 import {
     anonymizeIp,
     buildCombatantsFallbackForExtraJson,
@@ -134,6 +135,7 @@ async function handler(req: NextRequest): Promise<Response> {
     if (req.method !== 'POST') {
         return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
     }
+    await ensureRuntimeShieldWordRules();
 
 	    const startedAtMs = Date.now();
 	    const startedAtIso = new Date(startedAtMs).toISOString();

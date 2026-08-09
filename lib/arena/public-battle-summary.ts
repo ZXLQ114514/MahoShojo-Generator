@@ -5,6 +5,7 @@ import { getDrizzleDbFromRuntime, type AppDrizzleDb } from '@/lib/db/drizzle';
 import { siteSettings } from '@/lib/db/schema';
 import { eq, or } from 'drizzle-orm';
 import { applyShieldWords } from '@/lib/shield-word-filter';
+import { getRuntimeShieldWordRulesSnapshot } from '@/lib/shield-word-runtime';
 import { quickCheck } from '@/lib/sensitive-word-filter';
 import { listPublicBattleReportKDRows, type PublicBattleReportKDRow } from '@/lib/db/repositories/battle-report-generations';
 
@@ -262,6 +263,8 @@ export const setStoredPublicBattleSummary = async (db: AppDrizzleDb, userId: num
 };
 
 export const generatePublicBattleSummary = async (input: { model?: string; username?: string | null }): Promise<PublicBattleSummary> => {
+  const shieldWordSettings = await getRuntimeShieldWordRulesSnapshot();
+  if (!shieldWordSettings.available) throw new Error('内容安全规则暂不可用');
   const db = getDrizzleDbFromRuntime();
   if (!db) throw new Error('总结服务暂不可用');
   const summaryRows = limitPublicBattleSummaryRows(await listPublicBattleReportKDRows(db));

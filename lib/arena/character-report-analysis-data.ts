@@ -8,6 +8,7 @@ import {
 import { getBattleReportGenerationCombatantsByGenerationIds } from '@/lib/database/battle-report-generation-combatants';
 import { getDrizzleDbFromRuntime } from '@/lib/db/drizzle';
 import { applyShieldWords } from '@/lib/shield-word-filter';
+import { ensureRuntimeShieldWordRules } from '@/lib/shield-word-runtime';
 import { quickCheck } from '@/lib/sensitive-word-filter';
 import {
   analyzeCharacterBattleReports,
@@ -93,6 +94,7 @@ export const removeUnsafeFinalResultPreviews = async (
 export const loadCharacterReportAnalysis = async (
   input: CharacterReportAnalysisLoadInput,
 ): Promise<CharacterReportAnalysisLoadResult> => {
+  await ensureRuntimeShieldWordRules();
   const cardId = input.cardId.trim();
   if (!cardId) return { error: '缺少 cardId', status: 400 };
 
