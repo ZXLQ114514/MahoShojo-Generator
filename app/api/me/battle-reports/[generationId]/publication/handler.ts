@@ -7,6 +7,7 @@ import { loadBattleReportGenerationOutputText } from '@/lib/arena/battle-report-
 import { applyShieldWords } from '@/lib/shield-word-filter';
 import { quickCheck } from '@/lib/sensitive-word-filter';
 import { json, requireAuthUser } from '@/lib/pvp/server';
+import { getRuntimeShieldWordRulesSnapshot } from '@/lib/shield-word-runtime';
 
 const getGenerationId = (url: string): string | null => {
   const parts = new URL(url).pathname.split('/').filter(Boolean);
@@ -68,6 +69,8 @@ export async function appRouteHandler(req: Request): Promise<Response> {
     : null;
 
   if (isPublic) {
+    const shieldWordSettings = await getRuntimeShieldWordRulesSnapshot();
+    if (!shieldWordSettings.available) return json({ error: '内容安全规则暂不可用，请稍后重试' }, { status: 503 });
     if (record.status !== 'completed') return json({ error: '只有已完成的战报可以公开' }, { status: 400 });
     if (record.output_has_shield_words === 1) return json({ error: '战报包含屏蔽词，不能公开' }, { status: 422 });
 

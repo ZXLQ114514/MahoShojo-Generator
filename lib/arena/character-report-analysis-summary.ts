@@ -3,6 +3,7 @@ import { z } from 'zod/v3';
 import { AI_PROVIDER_CATALOG } from '@/lib/ai/constants';
 import { generateWithAI } from '@/lib/ai';
 import { applyShieldWords } from '@/lib/shield-word-filter';
+import { ensureRuntimeShieldWordRules } from '@/lib/shield-word-runtime';
 import { quickCheck } from '@/lib/sensitive-word-filter';
 import { randomUUID } from '@/lib/crypto';
 import type {
@@ -129,6 +130,7 @@ export const generateCharacterReportAiSummary = async (input: {
   model?: string | null;
   username?: string | null;
 }): Promise<CharacterReportAiSummary> => {
+  await ensureRuntimeShieldWordRules();
   const model = normalizeRequestedModel(input.model);
   if (input.analysis.includedReports <= 0) {
     return buildFallbackSummary(input.analysis, model, true);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Plus, Trash2 } from 'lucide-react';
 
 import { authStorage } from '@/lib/auth';
 import { useAuth } from '@/lib/useAuth';
@@ -67,6 +68,8 @@ type CardStatus = 'pending' | 'approved' | 'rejected' | 'all';
 type AdminUserPatch = { isBanned?: boolean; isAdmin?: boolean; isReviewExempt?: boolean; slotCount?: number };
 type CooldownSettings = { systemSeconds: number; freeSeconds: number; customSeconds: number; battleSeconds: number };
 type PublicBattleSummarySettings = { intervalMinutes: number; model: string; enabled: boolean };
+type ShieldWordRule = { word: string; replacement: string | null };
+type ShieldWordLimits = { maxRules: number; maxWordLength: number; maxReplacementLength: number };
 
 const SUMMARY_MODEL_OPTIONS = Array.from(new Set(
   AI_PROVIDER_CATALOG.flatMap((provider) => provider.models.map((model) => model.value)),
@@ -102,6 +105,12 @@ export function AdminPage() {
   const [createdLicenseKey, setCreatedLicenseKey] = useState<string | null>(null);
   const [cooldownSettings, setCooldownSettings] = useState<CooldownSettings>({ systemSeconds: 60, freeSeconds: 120, customSeconds: 3, battleSeconds: 120 });
   const [publicBattleSummary, setPublicBattleSummary] = useState<PublicBattleSummarySettings>({ intervalMinutes: 1440, model: '', enabled: true });
+  const [shieldWordRules, setShieldWordRules] = useState<ShieldWordRule[]>([]);
+  const [shieldWordLimits, setShieldWordLimits] = useState<ShieldWordLimits>({ maxRules: 300, maxWordLength: 80, maxReplacementLength: 120 });
+  const [builtInShieldWordCount, setBuiltInShieldWordCount] = useState(0);
+  const [savingShieldWords, setSavingShieldWords] = useState(false);
+  const [shieldWordError, setShieldWordError] = useState<string | null>(null);
+  const [shieldWordsLoaded, setShieldWordsLoaded] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,10 +145,27 @@ export function AdminPage() {
   }, [reportSearch, request]);
 
   const loadSettings = useCallback(async () => {
-    const response = await request('/api/admin/settings');
-    const payload = (await response.json()) as { publicAiCooldown?: CooldownSettings; publicBattleSummary?: PublicBattleSummarySettings };
+    const settingsResponse = await request('/api/admin/settings');
+    const payload = (await settingsResponse.json()) as { publicAiCooldown?: CooldownSettings; publicBattleSummary?: PublicBattleSummarySettings };
     if (payload.publicAiCooldown) setCooldownSettings(payload.publicAiCooldown);
     if (payload.publicBattleSummary) setPublicBattleSummary(payload.publicBattleSummary);
+    try {
+      setShieldWordError(null);
+      setShieldWordsLoaded(false);
+      const shieldWordsResponse = await request('/api/admin/shield-words');
+      const shieldWordsPayload = (await shieldWordsResponse.json()) as {
+        rules?: ShieldWordRule[];
+        limits?: ShieldWordLimits;
+        builtInRuleCount?: number;
+      };
+      setShieldWordRules(Array.isArray(shieldWordsPayload.rules) ? shieldWordsPayload.rules : []);
+      if (shieldWordsPayload.limits) setShieldWordLimits(shieldWordsPayload.limits);
+      if (typeof shieldWordsPayload.builtInRuleCount === 'number') setBuiltInShieldWordCount(shieldWordsPayload.builtInRuleCount);
+      setShieldWordsLoaded(true);
+    } catch (loadError) {
+      setShieldWordsLoaded(false);
+      setShieldWordError(loadError instanceof Error ? loadError.message : '屏蔽词设置加载失败');
+    }
   }, [request]);
 
   const loadLicenses = useCallback(async () => {
@@ -225,6 +251,53 @@ export function AdminPage() {
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '设置保存失败');
     }
+  };
+
+  const saveShieldWords = async () => {
+    if (!shieldWordsLoaded) {
+      setShieldWordError('屏蔽词设置尚未成功加载，不能执行覆盖');
+      return;
+    }
+    setShieldWordError(null);
+    setNotice(null);
+    setSavingShieldWords(true);
+    try {
+      const response = await request('/api/admin/shield-words', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rules: shieldWordRules }),
+      });
+      const payload = await response.json() as { rules?: ShieldWordRule[] };
+      const savedRules = Array.isArray(payload.rules) ? payload.rules : shieldWordRules;
+      setShieldWordRules(savedRules);
+      const { setRuntimeShieldWordRules } = await import('@/lib/shield-word-filter');
+      setRuntimeShieldWordRules(savedRules);
+      setNotice('屏蔽词设置已保存并生效');
+    } catch (saveError) {
+      setShieldWordError(saveError instanceof Error ? saveError.message : '屏蔽词设置保存失败');
+    } finally {
+      setSavingShieldWords(false);
+    }
+  };
+
+  const updateShieldWordRule = (index: number, patch: Partial<ShieldWordRule>) => {
+    setShieldWordRules((current) => current.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, ...patch } : rule));
+  };
+
+  const removeShieldWordRule = (index: number) => {
+    setShieldWordRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
+  };
+
+  const addShieldWordRule = () => {
+    if (!shieldWordsLoaded) {
+      setShieldWordError('屏蔽词设置尚未成功加载，不能新增规则');
+      return;
+    }
+    if (shieldWordRules.length >= shieldWordLimits.maxRules) {
+      setShieldWordError(`自定义屏蔽词最多 ${shieldWordLimits.maxRules} 条`);
+      return;
+    }
+    setShieldWordRules((current) => [...current, { word: '', replacement: null }]);
   };
 
   const createLicense = async () => {
@@ -350,8 +423,28 @@ export function AdminPage() {
               })}</div>{!licenses.length ? <p className="py-8 text-center text-sm text-gray-500">暂无图片生成许可。</p> : null}
             </section>
           </div> : null}
-          {!loading && tab === 'settings' ? <div className="space-y-6"><section className="max-w-xl space-y-4"><div><h3 className="font-semibold">生成后等待时长</h3><p className="mt-1 text-sm text-gray-500">在线配置，单位为秒，范围 0 到 86400。修改后新请求立即使用新值。</p></div>{([['systemSeconds', '系统供应商生成间隔'], ['freeSeconds', '免费生成间隔'], ['customSeconds', '自定义供应商生成间隔'], ['battleSeconds', '战斗/战报生成间隔']] as const).map(([key, label]) => <label key={key} className="flex items-center justify-between gap-4 rounded border border-gray-200 px-3 py-3 text-sm"><span>{label}</span><input type="number" min="0" max="86400" value={cooldownSettings[key]} onChange={(event) => setCooldownSettings((current) => ({ ...current, [key]: Number(event.target.value) }))} className="w-28 rounded border border-gray-300 px-2 py-1.5 text-right" /></label>)}<button type="button" onClick={() => void saveSettings()} className="rounded bg-blue-600 px-4 py-2 text-sm text-white">保存设置</button></section><section><div className="mb-3"><h3 className="font-semibold">全部配置项</h3><p className="mt-1 text-sm text-gray-500">“在线管理”可直接在本页修改；“环境变量”和“配置文件”需要修改部署环境后重新构建。密钥值不会显示。</p></div><div className="grid gap-4 xl:grid-cols-2">{configurationCatalog.map((category) => <section key={category.id} className="rounded-lg border border-gray-200 p-4"><h4 className="font-semibold text-gray-900">{category.title}</h4><p className="mt-1 text-xs leading-5 text-gray-500">{category.description}</p><div className="mt-3 space-y-3">{category.entries.map((entry) => <div key={entry.key} className="border-t border-gray-100 pt-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-gray-800">{entry.name}</span><span className={`rounded-full px-2 py-1 text-xs ${entry.management === 'admin' ? 'bg-green-50 text-green-700' : entry.management === 'env' ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>{entry.management === 'admin' ? '在线管理' : entry.management === 'env' ? '环境变量' : '配置文件'}</span></div><p className="mt-1 break-all font-mono text-xs text-gray-500">{entry.key}</p><p className="mt-1 text-xs leading-5 text-gray-600">默认：{entry.defaultValue} · {entry.effect}</p></div>)}</div></section>)}</div></section></div> : null}
-          {!loading && tab === 'settings' ? <section className="max-w-xl space-y-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4"><div><h3 className="font-semibold text-indigo-950">公开战报角色评价总结</h3><p className="mt-1 text-sm leading-6 text-indigo-900/70">服务器按周期总结所有非日常公开战报；用户手动触发的总结不会保存。周期由页面访问触发检查，部署到 Cloudflare 后可由外部定时访问公开总结接口。</p></div><label className="flex items-center gap-2 text-sm text-indigo-950"><input type="checkbox" checked={publicBattleSummary.enabled} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, enabled: event.target.checked }))} />启用自动总结</label><label className="block text-sm text-indigo-950">自动总结间隔（分钟）<input type="number" min="5" max="10080" value={publicBattleSummary.intervalMinutes} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, intervalMinutes: Number(event.target.value) }))} className="mt-1 w-full rounded border border-indigo-200 bg-white px-3 py-2" /></label><label className="block text-sm text-indigo-950">自动总结模型<select value={publicBattleSummary.model} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, model: event.target.value }))} className="mt-1 w-full rounded border border-indigo-200 bg-white px-3 py-2"><option value="">系统默认配置</option>{SUMMARY_MODEL_OPTIONS.map((model) => <option key={model} value={model}>{model}</option>)}</select></label><p className="text-xs leading-5 text-indigo-900/70">评价分数和八档等级由服务端固定公式计算，模型只生成机制与理由。模型必须已存在于系统模型目录。</p></section> : null}
+          {!loading && tab === 'settings' ? <div className="space-y-6">
+            <section className="max-w-xl space-y-4"><div><h3 className="font-semibold">生成后等待时长</h3><p className="mt-1 text-sm text-gray-500">在线配置，单位为秒，范围 0 到 86400。修改后新请求立即使用新值。</p></div>{([['systemSeconds', '系统供应商生成间隔'], ['freeSeconds', '免费生成间隔'], ['customSeconds', '自定义供应商生成间隔'], ['battleSeconds', '战斗/战报生成间隔']] as const).map(([key, label]) => <label key={key} className="flex items-center justify-between gap-4 rounded border border-gray-200 px-3 py-3 text-sm"><span>{label}</span><input type="number" min="0" max="86400" value={cooldownSettings[key]} onChange={(event) => setCooldownSettings((current) => ({ ...current, [key]: Number(event.target.value) }))} className="w-28 rounded border border-gray-300 px-2 py-1.5 text-right" /></label>)}<button type="button" onClick={() => void saveSettings()} className="rounded bg-blue-600 px-4 py-2 text-sm text-white">保存设置</button></section>
+            <section className="space-y-4 border-t border-gray-200 pt-6">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-gray-900">屏蔽词</h3><p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">在线规则会追加到 {builtInShieldWordCount} 条内置安全规则上，不会关闭或删除内置词表。遮罩使用固定字符 “❀”；替换可以为命中的词指定安全文本。</p></div><span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">{shieldWordRules.length} / {shieldWordLimits.maxRules} 条</span></div>
+              {shieldWordError ? <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{shieldWordError}</div> : null}
+              <div className="overflow-x-auto rounded border border-gray-200">
+                <table className="min-w-[680px] w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="px-3 py-2">屏蔽词</th><th className="w-32 px-3 py-2">处理方式</th><th className="px-3 py-2">替换文本</th><th className="w-14 px-3 py-2"><span className="sr-only">操作</span></th></tr></thead>
+                  <tbody>{shieldWordRules.map((rule, index) => <tr key={index} className="border-t border-gray-100 align-top">
+                    <td className="px-3 py-2"><input aria-label={`第 ${index + 1} 条屏蔽词`} value={rule.word} maxLength={shieldWordLimits.maxWordLength} onChange={(event) => updateShieldWordRule(index, { word: event.target.value })} className="w-full rounded border border-gray-300 px-2 py-1.5" /></td>
+                    <td className="px-3 py-2"><select aria-label={`第 ${index + 1} 条处理方式`} value={rule.replacement === null ? 'mask' : 'replace'} onChange={(event) => updateShieldWordRule(index, { replacement: event.target.value === 'mask' ? null : rule.replacement ?? '' })} className="w-full rounded border border-gray-300 px-2 py-1.5"><option value="mask">遮罩</option><option value="replace">替换</option></select></td>
+                    <td className="px-3 py-2"><input aria-label={`第 ${index + 1} 条替换文本`} disabled={rule.replacement === null} value={rule.replacement ?? ''} maxLength={shieldWordLimits.maxReplacementLength} onChange={(event) => updateShieldWordRule(index, { replacement: event.target.value })} placeholder={rule.replacement === null ? '使用 ❀ 遮罩' : '输入替换文本'} className="w-full rounded border border-gray-300 px-2 py-1.5 disabled:bg-gray-100 disabled:text-gray-400" /></td>
+                    <td className="px-3 py-2"><button type="button" title="删除规则" aria-label={`删除第 ${index + 1} 条屏蔽词`} onClick={() => removeShieldWordRule(index)} className="inline-flex h-8 w-8 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50"><Trash2 aria-hidden="true" size={16} /></button></td>
+                  </tr>)}</tbody>
+                </table>
+                {!shieldWordRules.length ? <p className="px-4 py-8 text-center text-sm text-gray-500">暂无自定义规则，内置屏蔽词仍然生效。</p> : null}
+              </div>
+              <div className="flex flex-wrap gap-2"><button type="button" onClick={addShieldWordRule} disabled={!shieldWordsLoaded || shieldWordRules.length >= shieldWordLimits.maxRules} className="inline-flex items-center gap-1.5 rounded border border-gray-300 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"><Plus aria-hidden="true" size={16} />添加屏蔽词</button><button type="button" onClick={() => void saveShieldWords()} disabled={!shieldWordsLoaded || savingShieldWords} className="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">{savingShieldWords ? '正在保存…' : '保存屏蔽词'}</button></div>
+            </section>
+            <section><div className="mb-3"><h3 className="font-semibold">全部配置项</h3><p className="mt-1 text-sm text-gray-500">“在线管理”可直接在本页修改；“环境变量”和“配置文件”需要修改部署环境后重新构建。密钥值不会显示。</p></div><div className="grid gap-4 xl:grid-cols-2">{configurationCatalog.map((category) => <section key={category.id} className="rounded-lg border border-gray-200 p-4"><h4 className="font-semibold text-gray-900">{category.title}</h4><p className="mt-1 text-xs leading-5 text-gray-500">{category.description}</p><div className="mt-3 space-y-3">{category.entries.map((entry) => <div key={entry.key} className="border-t border-gray-100 pt-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium text-gray-800">{entry.name}</span><span className={`rounded-full px-2 py-1 text-xs ${entry.management === 'admin' ? 'bg-green-50 text-green-700' : entry.management === 'env' ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>{entry.management === 'admin' ? '在线管理' : entry.management === 'env' ? '环境变量' : '配置文件'}</span></div><p className="mt-1 break-all font-mono text-xs text-gray-500">{entry.key}</p><p className="mt-1 text-xs leading-5 text-gray-600">默认：{entry.defaultValue} · {entry.effect}</p></div>)}</div></section>)}</div></section>
+          </div> : null}
+          {!loading && tab === 'settings' ? <section className="max-w-xl space-y-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4"><div><h3 className="font-semibold text-indigo-950">公开战报角色评价总结</h3><p className="mt-1 text-sm leading-6 text-indigo-900/70">服务器按周期总结最近 50 篇非日常公开战报；用户手动触发的总结不会保存。周期由页面访问触发检查，部署到 Cloudflare 后可由外部定时访问公开总结接口。</p></div><label className="flex items-center gap-2 text-sm text-indigo-950"><input type="checkbox" checked={publicBattleSummary.enabled} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, enabled: event.target.checked }))} />启用自动总结</label><label className="block text-sm text-indigo-950">自动总结间隔（分钟）<input type="number" min="5" max="10080" value={publicBattleSummary.intervalMinutes} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, intervalMinutes: Number(event.target.value) }))} className="mt-1 w-full rounded border border-indigo-200 bg-white px-3 py-2" /></label><label className="block text-sm text-indigo-950">自动总结模型<select value={publicBattleSummary.model} onChange={(event) => setPublicBattleSummary((current) => ({ ...current, model: event.target.value }))} className="mt-1 w-full rounded border border-indigo-200 bg-white px-3 py-2"><option value="">系统默认配置</option>{SUMMARY_MODEL_OPTIONS.map((model) => <option key={model} value={model}>{model}</option>)}</select></label><p className="text-xs leading-5 text-indigo-900/70">评价分数和八档等级由服务端固定公式计算，模型只生成机制与理由。模型必须已存在于系统模型目录。</p></section> : null}
         </section>
       </div>
     </main>

@@ -15,6 +15,7 @@ import { quickCheck } from '@/lib/sensitive-word-filter';
 import { applyShieldWords } from '@/lib/shield-word-filter';
 import { getLargeObjectByOwnerRef } from '@/lib/database/large-objects';
 import { deleteObject } from '@/lib/r2';
+import { getRuntimeShieldWordRulesSnapshot } from '@/lib/shield-word-runtime';
 
 const getGenerationIdFromUrl = (url: string): string | null => {
   try {
@@ -55,6 +56,8 @@ async function handler(req: Request): Promise<Response> {
     if (typeof body.note !== 'string') return json({ error: 'note 必须是字符串' }, { status: 400 });
     const note = body.note.trim().slice(0, 500) || null;
     if (record.is_public === 1) {
+      const shieldWordSettings = await getRuntimeShieldWordRulesSnapshot();
+      if (!shieldWordSettings.available) return json({ error: '内容安全规则暂不可用，请稍后重试' }, { status: 503 });
       const output = await loadBattleReportGenerationOutputText({
         generationId: record.id,
         outputPreview: record.output_preview,

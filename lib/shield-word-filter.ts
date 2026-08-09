@@ -4,6 +4,7 @@ import { pinyin } from 'pinyin-pro';
 import {
   buildLatinTokenMappingForPinyinCheck,
   createWordsSearch,
+  foldAsciiCase,
   foldFullwidthAscii,
   normalizeLatin,
   toSimplifiedChinese,
@@ -22,6 +23,13 @@ interface ShieldWordsConfig {
   replace?: Record<string, string>;
   encoding?: 'base64';
 }
+
+export type ShieldWordRule = {
+  word: string;
+  replacement: string | null;
+};
+
+export type ShieldWordFilter = (text: string) => ShieldWordFilterResult;
 
 export interface ShieldWordFilterResult {
   hasShieldWords: boolean;
@@ -199,6 +207,8 @@ const getDecodedWords = (): string[] => {
   return decodedWordsCache;
 };
 
+export const getBuiltInShieldWordCount = (): number => getDecodedWords().length;
+
 const getReplaceMap = (): Map<string, string> => {
   if (replaceMapCache) return replaceMapCache;
   replaceMapCache = buildReplaceMap(shieldWordsConfig);
@@ -208,7 +218,7 @@ const getReplaceMap = (): Map<string, string> => {
 const getSimplifiedKeywordCache = (): string[] => {
   if (simplifiedKeywordCache) return simplifiedKeywordCache;
   simplifiedKeywordCache = getDecodedWords()
-    .map((w) => toSimplifiedChinese(w).toLowerCase())
+    .map((w) => foldAsciiCase(foldFullwidthAscii(toSimplifiedChinese(w))))
     .filter((w) => typeof w === 'string' && w.trim().length > 0);
   return simplifiedKeywordCache;
 };
@@ -218,7 +228,7 @@ const getSimplifiedReplaceMap = (): Map<string, string> => {
   const rawReplaceMap = getReplaceMap();
   const map = new Map<string, string>();
   for (const [word, replacement] of rawReplaceMap.entries()) {
-    map.set(toSimplifiedChinese(word).toLowerCase(), replacement);
+    map.set(foldAsciiCase(foldFullwidthAscii(toSimplifiedChinese(word))), replacement);
   }
   simplifiedReplaceMapCache = map;
   return simplifiedReplaceMapCache;
@@ -264,12 +274,19 @@ const getPinyinSearch = (): { search: ReturnType<typeof createWordsSearch> | nul
   return { search: pinyinSearchCache, pinyinToSource };
 };
 
-export const applyShieldWords = (text: string): ShieldWordFilterResult => {
-  const maskChar = shieldWordsConfig.mask || '❀';
+const applyCompiledShieldWords = (
+  text: string,
+  input: {
+    maskChar: string;
+    wordsSearch: ReturnType<typeof createWordsSearch>;
+    replaceMap: Map<string, string>;
+    pinyinSearch: ReturnType<typeof createWordsSearch> | null;
+    pinyinToSource: Map<string, string>;
+  },
+): ShieldWordFilterResult => {
+  const { maskChar, wordsSearch: search, replaceMap, pinyinSearch, pinyinToSource } = input;
 
-  const simplifiedLower = foldFullwidthAscii(toSimplifiedChinese(text)).toLowerCase();
-  const replaceMap = getSimplifiedReplaceMap();
-  const search = getWordsSearch();
+  const simplifiedLower = foldAsciiCase(foldFullwidthAscii(toSimplifiedChinese(text)));
 
   const detectedWords: string[] = [];
   const replacements: Array<{ start: number; endInclusive: number; replacement: string }> = [];
@@ -294,8 +311,7 @@ export const applyShieldWords = (text: string): ShieldWordFilterResult => {
     }
   }
 
-  // 额外：纯拼音绕过（仅对拉丁字母/数字做抽取；匹配到后统一用遮罩字符替换）
-  const { search: pinyinSearch, pinyinToSource } = getPinyinSearch();
+  // 额外：纯拼音绕过（仅对拉丁字母/数字做抽取）。
   if (pinyinSearch) {
     const { normalized, indexMap, isTokenStart, isTokenEnd } = buildLatinTokenMappingForPinyinCheck(text);
     if (normalized) {
@@ -315,14 +331,34 @@ export const applyShieldWords = (text: string): ShieldWordFilterResult => {
         const source = pinyinToSource.get(keywordPinyin) ?? keywordPinyin;
         const originalSlice = text.slice(start, endInclusive + 1);
         if (source && !detectedWords.includes(`${source}(拼音)`)) detectedWords.push(`${source}(拼音)`);
-        const maskLen = Math.max(1, Array.from(originalSlice).length);
-        replacements.push({ start, endInclusive, replacement: maskChar.repeat(maskLen) });
+        const normalizedSource = foldAsciiCase(foldFullwidthAscii(toSimplifiedChinese(source)));
+        const mappedReplacement = replaceMap.get(normalizedSource);
+        const replacement = typeof mappedReplacement === 'string'
+          ? mappedReplacement
+          : maskChar.repeat(Math.max(1, Array.from(originalSlice).length));
+        replacements.push({ start, endInclusive, replacement });
       }
     }
   }
 
-  // 从后往前替换，避免索引偏移
-  const sorted = replacements.sort((a, b) => b.start - a.start || b.endInclusive - a.endInclusive);
+  // 同一区间可能同时命中短词、长词和拼音规则。包含关系保留最长命中；
+  // 部分交叠则遮罩完整并集，避免丢弃后续命中的尾部。
+  const selected: typeof replacements = [];
+  for (const candidate of replacements.sort((left, right) =>
+    left.start - right.start || right.endInclusive - left.endInclusive)) {
+    const previous = selected.at(-1);
+    if (!previous || candidate.start > previous.endInclusive) {
+      selected.push(candidate);
+      continue;
+    }
+    if (candidate.endInclusive <= previous.endInclusive) continue;
+    previous.endInclusive = candidate.endInclusive;
+    const originalSlice = text.slice(previous.start, previous.endInclusive + 1);
+    previous.replacement = maskChar.repeat(Math.max(1, Array.from(originalSlice).length));
+  }
+
+  // 从后往前替换，避免索引偏移。
+  const sorted = selected.sort((a, b) => b.start - a.start || b.endInclusive - a.endInclusive);
   let filteredText = text;
   for (const r of sorted) {
     filteredText = `${filteredText.slice(0, r.start)}${r.replacement}${filteredText.slice(r.endInclusive + 1)}`;
@@ -335,3 +371,78 @@ export const applyShieldWords = (text: string): ShieldWordFilterResult => {
     originalText: text,
   };
 };
+
+export const createShieldWordFilter = (customRules: readonly ShieldWordRule[] = []): ShieldWordFilter => {
+  if (customRules.length === 0) {
+    return (text: string): ShieldWordFilterResult => {
+      const pinyinRules = getPinyinSearch();
+      return applyCompiledShieldWords(text, {
+        maskChar: shieldWordsConfig.mask || '❀',
+        wordsSearch: getWordsSearch(),
+        replaceMap: getSimplifiedReplaceMap(),
+        pinyinSearch: pinyinRules.search,
+        pinyinToSource: pinyinRules.pinyinToSource,
+      });
+    };
+  }
+
+  const words = [...getDecodedWords()];
+  const replaceMap = new Map(getSimplifiedReplaceMap());
+
+  for (const rule of customRules) {
+    const word = typeof rule?.word === 'string' ? rule.word.trim() : '';
+    if (!word) continue;
+    words.push(word);
+    const normalizedWord = foldAsciiCase(foldFullwidthAscii(toSimplifiedChinese(word)));
+    if (typeof rule.replacement === 'string' && rule.replacement.length > 0) {
+      replaceMap.set(normalizedWord, rule.replacement);
+    } else {
+      // 自定义遮罩规则可以覆盖内置替换文本，但不会删除内置命中能力。
+      replaceMap.delete(normalizedWord);
+    }
+  }
+
+  const simplifiedWords = Array.from(new Set(words
+    .map((word) => foldAsciiCase(foldFullwidthAscii(toSimplifiedChinese(word))))
+    .filter((word) => word.trim().length > 0)));
+  const wordsSearch = createWordsSearch(simplifiedWords);
+
+  const pinyinToSource = new Map<string, string>();
+  const pinyinKeywords: string[] = [];
+  for (const word of words) {
+    const simplified = toSimplifiedChinese(word);
+    const hanCharCount = Array.from(simplified).filter((character) => /[\u4e00-\u9fa5]/.test(character)).length;
+    if (hanCharCount < 2) continue;
+    let normalized = '';
+    try {
+      const values = pinyin(simplified, { toneType: 'none', type: 'array' }) as unknown as string[];
+      normalized = normalizeLatin(Array.isArray(values) ? values.join('') : String(values ?? ''));
+    } catch {
+      normalized = '';
+    }
+    if (!normalized) continue;
+    pinyinKeywords.push(normalized);
+    const previous = pinyinToSource.get(normalized);
+    if (!previous || previous.length < word.length) pinyinToSource.set(normalized, word);
+  }
+  const uniquePinyinKeywords = Array.from(new Set(pinyinKeywords));
+  const pinyinSearch = uniquePinyinKeywords.length > 0 ? createWordsSearch(uniquePinyinKeywords) : null;
+
+  return (text: string): ShieldWordFilterResult => applyCompiledShieldWords(text, {
+    maskChar: shieldWordsConfig.mask || '❀',
+    wordsSearch,
+    replaceMap,
+    pinyinSearch,
+    pinyinToSource,
+  });
+};
+
+const builtInShieldWordFilter = createShieldWordFilter();
+
+let runtimeShieldWordFilter = builtInShieldWordFilter;
+
+export const setRuntimeShieldWordRules = (rules: readonly ShieldWordRule[]): void => {
+  runtimeShieldWordFilter = rules.length > 0 ? createShieldWordFilter(rules) : builtInShieldWordFilter;
+};
+
+export const applyShieldWords = (text: string): ShieldWordFilterResult => runtimeShieldWordFilter(text);

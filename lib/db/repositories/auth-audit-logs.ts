@@ -32,10 +32,10 @@ const normalizeOptionalInteger = (value: unknown): number | null => {
   return value;
 };
 
-export const createAuthAuditLog = async (
+export const prepareAuthAuditLogInsert = (
   db: AppDrizzleDb,
   input: CreateAuthAuditLogInput,
-): Promise<{ id: string } | null> => {
+) => {
   const eventType = normalizeOptionalText(input.eventType, 64);
   const authSource = normalizeOptionalText(input.authSource, 32);
   const resultCode = normalizeOptionalText(input.resultCode, 64);
@@ -47,7 +47,7 @@ export const createAuthAuditLog = async (
       : Math.floor(Date.now() / 1000);
 
   const id = randomUUID();
-  await db.insert(authAuditLogs).values({
+  const query = db.insert(authAuditLogs).values({
     id,
     businessUserId: normalizeOptionalInteger(input.businessUserId),
     authUserId: normalizeOptionalText(input.authUserId, 128),
@@ -63,7 +63,17 @@ export const createAuthAuditLog = async (
     createdAt,
   });
 
-  return { id };
+  return { id, query };
+};
+
+export const createAuthAuditLog = async (
+  db: AppDrizzleDb,
+  input: CreateAuthAuditLogInput,
+): Promise<{ id: string } | null> => {
+  const prepared = prepareAuthAuditLogInsert(db, input);
+  if (!prepared) return null;
+  await prepared.query;
+  return { id: prepared.id };
 };
 
 export type CountAuthAuditSuccessInput = {

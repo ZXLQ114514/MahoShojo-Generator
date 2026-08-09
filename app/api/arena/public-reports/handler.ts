@@ -9,6 +9,7 @@ import { loadBattleReportGenerationOutputText } from '@/lib/arena/battle-report-
 import { hydrateBattleReportCardFromGenerationRecord } from '@/lib/arena/battle-report-card-fallback';
 import { applyShieldWords } from '@/lib/shield-word-filter';
 import { quickCheck } from '@/lib/sensitive-word-filter';
+import { getRuntimeShieldWordRulesSnapshot } from '@/lib/shield-word-runtime';
 
 type PublicBattleReportSummary = {
   id: string;
@@ -106,6 +107,8 @@ export async function appRouteHandler(req: Request): Promise<Response> {
   if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
 
   try {
+    const shieldWordSettings = await getRuntimeShieldWordRulesSnapshot();
+    if (!shieldWordSettings.available) return json({ error: '内容安全规则暂不可用，请稍后重试' }, 503);
     const url = getRequestUrl(req);
     const id = url.searchParams.get('id')?.trim() ?? '';
     if (id) {

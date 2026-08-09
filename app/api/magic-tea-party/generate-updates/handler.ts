@@ -10,6 +10,7 @@ import type { MagicTeaPartyMessage, MagicTeaPartyRole, MagicTeaPartyScenario, Ma
 import { generateWithAI, LoadBalanceStrategy } from '@/lib/ai';
 import { buildChannelContextFromResolved } from '@/lib/ai/availability';
 import { applyShieldWords } from '@/lib/shield-word-filter';
+import { ensureRuntimeShieldWordRules } from '@/lib/shield-word-runtime';
 import { recordUserActivityFromRequest } from '@/lib/user-activity/record';
 
 const log = getLogger('api-magic-tea-party-generate-updates');
@@ -155,6 +156,7 @@ async function handler(req: NextRequest): Promise<Response> {
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, { status: 405 });
   }
+  await ensureRuntimeShieldWordRules();
 
   try {
     const parsedBody = RequestBodySchema.safeParse(await req.json().catch(() => null));
