@@ -198,12 +198,27 @@ export function getRequestProtocol(url: URL, headers: Headers): string {
 }
 
 function parseRequestHost(url: URL, headers: Headers): URL {
-  const host = headers.get('host')?.split(',')[0]?.trim();
-  if (host) {
+  const hostCandidates = [
+    headers.get('x-forwarded-host')?.split(',')[0]?.trim(),
+    headers.get('host')?.trim(),
+  ];
+
+  for (const host of hostCandidates) {
+    if (!host) continue;
+
     try {
-      return new URL(`http://${host}`);
+      const parsed = new URL(`http://${host}`);
+      if (
+        !parsed.username &&
+        !parsed.password &&
+        parsed.pathname === '/' &&
+        !parsed.search &&
+        !parsed.hash
+      ) {
+        return parsed;
+      }
     } catch {
-      // ignore malformed Host headers
+      // Try the next host source before falling back to the request URL.
     }
   }
 

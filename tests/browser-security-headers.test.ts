@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, test } from 'vitest';
 
 import {
@@ -194,6 +197,17 @@ describe('browser security headers', () => {
     expect(
       getRequestHostname(internalUrl, new Headers({ host: 'mahoshojo.example.com' })),
     ).toBe('mahoshojo.example.com');
+    const forwardedPublicHeaders = new Headers({
+      host: '127.0.0.1:3000',
+      'x-forwarded-host': 'mahoshojo.example.com',
+    });
+    expect(getRequestHostname(internalUrl, forwardedPublicHeaders)).toBe(
+      'mahoshojo.example.com',
+    );
+    expect(shouldRedirectToHttps(internalUrl, forwardedPublicHeaders)).toBe(true);
+    expect(buildHttpsRedirectUrl(internalUrl, forwardedPublicHeaders).href).toBe(
+      'https://mahoshojo.example.com/free',
+    );
     expect(
       getRequestHost(internalUrl, new Headers({ host: 'mahoshojo.example.com:8443' })),
     ).toBe('mahoshojo.example.com:8443');
@@ -212,5 +226,26 @@ describe('browser security headers', () => {
     expect(getRequestHostname(internalUrl, new Headers({ host: 'invalid host' }))).toBe(
       '0.0.0.0',
     );
+    expect(
+      getRequestHostname(
+        internalUrl,
+        new Headers({
+          host: 'mahoshojo.example.com',
+          'x-forwarded-host': 'evil.example@10.126.126.1/path',
+        }),
+      ),
+    ).toBe('mahoshojo.example.com');
+  });
+
+  test('Cloudflare 静态资产保留基础安全头但不强制 HTTPS', () => {
+    const staticAssetHeaders = readFileSync(join(process.cwd(), 'public/_headers'), 'utf8');
+
+    expect(staticAssetHeaders).toContain('/*');
+    expect(staticAssetHeaders).toContain('X-Content-Type-Options: nosniff');
+    expect(staticAssetHeaders).toContain('X-Frame-Options: DENY');
+    expect(staticAssetHeaders).toContain(`Permissions-Policy: ${buildPermissionsPolicy()}`);
+    expect(staticAssetHeaders).not.toContain('Strict-Transport-Security');
+    expect(staticAssetHeaders).not.toContain('upgrade-insecure-requests');
+    expect(staticAssetHeaders).toContain('X-Robots-Tag: noindex');
   });
 });
