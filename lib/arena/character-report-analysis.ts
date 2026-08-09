@@ -1,5 +1,6 @@
 import type { BattleReportCharacterAnalysisRow } from '@/lib/database/battle-report-generations';
 import type { BattleReportGenerationCombatantRow } from '@/lib/database/battle-report-generation-combatants';
+import { extractCharacterReportFinalResult } from '@/lib/arena/character-report-analysis-output';
 
 export type CharacterReportAnalysisCard = {
   id: string;
@@ -52,6 +53,7 @@ export type CharacterReportAnalysisReportRow = {
   winner: string | null;
   headline: string | null;
   note: string | null;
+  finalResult?: string | null;
 };
 
 export type CharacterReportAnalysisRecord = {
@@ -60,6 +62,18 @@ export type CharacterReportAnalysisRecord = {
   username: string | null;
   mode: string;
   outcome: CharacterReportOutcome;
+  finalResult: string | null;
+};
+
+export type CharacterReportAiSummary = {
+  generationKey: string;
+  generatedAt: string;
+  model: string;
+  conclusion: string;
+  strengths: string[];
+  weaknesses: string[];
+  finalResultCount: number;
+  isFallback: boolean;
 };
 
 export type CharacterReportAnalysisResult = {
@@ -84,6 +98,7 @@ export type CharacterReportAnalysisResult = {
   uploaderBreakdown: CharacterReportBreakdownRow[];
   timeline: CharacterReportTimelinePoint[];
   records: CharacterReportAnalysisRecord[];
+  finalResultCount: number;
   strengths: string[];
   weaknesses: string[];
   conclusion: string;
@@ -302,11 +317,19 @@ export const analyzeCharacterBattleReports = (input: {
         username: report.username,
         mode: (typeof report.mode === 'string' && report.mode.trim()) ? report.mode.trim() : '未知模式',
         outcome: resolveOutcome(report, combatants, input.card),
+        finalResult: extractCharacterReportFinalResult({
+          outputPreview: report.outputPreview,
+          outputChars: report.outputChars,
+          generationMode: report.generationMode,
+          outputHasSensitiveWords: report.outputHasSensitiveWords,
+          outputHasShieldWords: report.outputHasShieldWords,
+        }),
       } as CharacterReportAnalysisRecord & { mode: string };
     });
 
   const records = [...rawRecords].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt) || right.generationId.localeCompare(left.generationId, 'zh-CN'));
   const includedReports = records.length;
+  const finalResultCount = records.filter((record) => Boolean(record.finalResult)).length;
   const wins = records.filter((record) => record.outcome === 'win').length;
   const losses = records.filter((record) => record.outcome === 'loss').length;
   const draws = records.filter((record) => record.outcome === 'draw').length;
@@ -406,6 +429,7 @@ export const analyzeCharacterBattleReports = (input: {
     uploaderBreakdown,
     timeline,
     records,
+    finalResultCount,
     strengths,
     weaknesses,
     conclusion,

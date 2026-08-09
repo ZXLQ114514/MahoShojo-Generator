@@ -26,6 +26,8 @@ export type BattleReportCharacterAnalysisFilter = {
   toIso?: string;
   uploaderUsername?: string;
   sort?: BattleReportCharacterAnalysisSort;
+  /** 仅用于裁剪战报正文，不影响既有统计范围。 */
+  viewerUserId?: number;
 };
 
 export interface BattleReportGenerationInsert {
@@ -138,9 +140,14 @@ export interface BattleReportCharacterAnalysisRow {
   username: string | null;
   userId: number | null;
   mode: string | null;
+  generationMode: BattleReportGenerationMode;
   winner: string | null;
   headline: string | null;
   note: string | null;
+  outputPreview: string | null;
+  outputChars: number | null;
+  outputHasSensitiveWords: boolean | null;
+  outputHasShieldWords: boolean | null;
 }
 
 export type BattleReportCountsByStatus = {
