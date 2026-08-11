@@ -304,6 +304,10 @@ ${answerText}
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: 'character.canshou.details-stream',
+          variables: { language, loreText, answers: answerText },
+        },
         temperature: 0.8,
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
       },

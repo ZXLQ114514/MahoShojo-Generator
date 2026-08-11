@@ -370,6 +370,17 @@ async function handler(req: NextRequest): Promise<Response> {
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: template === 'general-scenario'
+            ? 'creator.general-scenario.stream'
+            : 'creator.general.stream',
+          variables: {
+            language,
+            creatorPromptText,
+            loreText,
+            answers: qaText || '（本次未提供问卷回答）',
+          },
+        },
         temperature: 0.75,
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
       },

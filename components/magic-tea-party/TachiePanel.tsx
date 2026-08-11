@@ -90,7 +90,15 @@ const truncateText = (value: string, maxChars: number): string => {
   const text = typeof value === 'string' ? value.trim() : '';
   if (!text) return '';
   if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(0, maxChars))}...[已截断]`;
+  const marker = '...[已截断]';
+  return `${text.slice(0, Math.max(0, maxChars - marker.length))}${marker}`.slice(0, maxChars);
+};
+
+const appendProtectedImageSuffix = (content: string, suffix: string): string => {
+  const normalizedSuffix = suffix.trim();
+  const separatorLength = content.trim() ? 1 : 0;
+  const maxContentChars = Math.max(0, MAX_PROMPT_CHARS - normalizedSuffix.length - separatorLength);
+  return [truncateText(content, maxContentChars), normalizedSuffix].filter(Boolean).join('\n');
 };
 
 const getMessagePlainText = (message: MagicTeaPartyMessage, roleNameLookup: (roleId: string) => string): string => {
@@ -170,9 +178,8 @@ const buildSuggestedPrompt = (params: {
       roleHint ? `外观要点：${roleHint}` : '',
       snippet ? `剧情片段（用于表情/动作/氛围）：${snippet}` : '',
       `场景：${scenarioTitle}`,
-      `风格：${styleHint}`,
     ].filter(Boolean);
-    return truncateText(parts.join('\n'), MAX_PROMPT_CHARS);
+    return appendProtectedImageSuffix(parts.join('\n'), `风格：${styleHint}`);
   }
 
   const includedRoleIds = Array.isArray(params.includedRoleIds) ? params.includedRoleIds : [];
@@ -185,10 +192,11 @@ const buildSuggestedPrompt = (params: {
     `场景：${scenarioTitle}`,
     castHint ? `登场角色：${castHint}` : '',
     snippet ? `剧情片段：${snippet}` : '',
+  ].filter(Boolean);
+  return appendProtectedImageSuffix(parts.join('\n'), [
     '构图建议：让角色和环境占满画面，不预留标题、对白或字幕区域。',
     `风格：${styleHint}`,
-  ].filter(Boolean);
-  return truncateText(parts.join('\n'), MAX_PROMPT_CHARS);
+  ].join('\n'));
 };
 
 export function MagicTeaPartyTachiePanel(props: {
@@ -336,8 +344,31 @@ export function MagicTeaPartyTachiePanel(props: {
 
   useEffect(() => {
     if (promptDirty) return;
+    let canceled = false;
     setPrompt(suggestedPrompt);
-  }, [promptDirty, suggestedPrompt]);
+    const promptId = kind === 'tachie' ? 'image.tea-party.character' : 'image.tea-party.scene';
+    const variables = kind === 'tachie'
+      ? { character: suggestedPrompt }
+      : { scene: suggestedPrompt };
+    void fetch('/api/tachie/suggest-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ promptId, variables }),
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const payload = (await response.json().catch(() => null)) as { prompt?: unknown } | null;
+        return typeof payload?.prompt === 'string' ? payload.prompt : null;
+      })
+      .then((managedPrompt) => {
+        if (!canceled && managedPrompt) setPrompt(managedPrompt);
+      })
+      .catch(() => undefined);
+    return () => {
+      canceled = true;
+    };
+  }, [kind, mainRoleId, promptDirty, props.session.roles, suggestedPrompt]);
 
   const activeWorkflowSettings = workflowSettingsByKind[kind];
   const workflowUuidForRequest = isLibLibUuid(activeWorkflowSettings.workflowUuid) ? activeWorkflowSettings.workflowUuid.trim() : undefined;
@@ -865,6 +896,7 @@ export function MagicTeaPartyTachiePanel(props: {
       <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
         <TachieGenerator
           prompt={styleId === 'vn' && kind === 'illustration' ? `${promptForGenerator}\n（额外约束：更强调镜头感与氛围，画面层次丰富）` : promptForGenerator}
+          managedPromptId={null}
           mode={kind}
           workflowUuid={workflowUuidForRequest}
           templateUuid={templateUuidForRequest}

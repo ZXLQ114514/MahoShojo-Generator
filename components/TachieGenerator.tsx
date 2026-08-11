@@ -33,6 +33,8 @@ const isModelScopePresetSize = (value: unknown): value is ModelScopePresetSize =
 
 interface TachieGeneratorProps {
   prompt: string;
+  /** null means the caller already resolved a domain-specific managed prompt. */
+  managedPromptId?: 'image.tachie.character-positive' | null;
   mode?: 'tachie' | 'illustration';
   workflowUuid?: string;
   templateUuid?: string;
@@ -45,6 +47,7 @@ interface TachieGeneratorProps {
 
 export default function TachieGenerator({
   prompt,
+  managedPromptId = 'image.tachie.character-positive',
   mode,
   workflowUuid,
   templateUuid,
@@ -199,6 +202,26 @@ export default function TachieGenerator({
     setProgressStatus("正在提交生成任务...");
 
     try {
+      let effectivePrompt = normalizedPrompt;
+      if (managedPromptId) {
+        try {
+          const response = await fetch('/api/tachie/suggest-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              promptId: managedPromptId,
+              variables: { character: normalizedPrompt, style: '' },
+            }),
+          });
+          if (response.ok) {
+            const payload = (await response.json().catch(() => null)) as { prompt?: unknown } | null;
+            if (typeof payload?.prompt === 'string' && payload.prompt.trim()) effectivePrompt = payload.prompt.trim();
+          }
+        } catch {
+          // Runtime prompt lookup failure falls back to the existing local prompt.
+        }
+      }
       const generationResult = await generateTachieWithProgress({
         source,
         accessKey: accessKey.trim(),
@@ -209,7 +232,7 @@ export default function TachieGenerator({
         xemapiApiKey: source === 'xemapi' && xemapiCredentialType === 'apiKey' ? xemapiCredential.trim() : undefined,
         imageGenerationLicenseKey: source === 'xemapi' && xemapiCredentialType === 'licenseKey' ? xemapiCredential.trim() : undefined,
         xemapiSize,
-        prompt: normalizedPrompt,
+        prompt: effectivePrompt,
         mode,
         workflowUuid,
         templateUuid,

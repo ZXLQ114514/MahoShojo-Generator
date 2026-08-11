@@ -99,10 +99,31 @@ export function BattleIllustrationPanel({
   );
 
   useEffect(() => {
-    if (!promptDirty) {
-      setPrompt(suggested.prompt);
-    }
-  }, [suggested.prompt, promptDirty]);
+    if (promptDirty) return;
+    let canceled = false;
+    setPrompt(suggested.prompt);
+    void fetch('/api/tachie/suggest-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        promptId: 'image.arena.illustration',
+        variables: { report: suggested.prompt },
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const payload = (await response.json().catch(() => null)) as { prompt?: unknown } | null;
+        return typeof payload?.prompt === 'string' ? payload.prompt : null;
+      })
+      .then((managedPrompt) => {
+        if (!canceled && managedPrompt) setPrompt(managedPrompt);
+      })
+      .catch(() => undefined);
+    return () => {
+      canceled = true;
+    };
+  }, [promptDirty, suggested.prompt]);
 
   useEffect(() => {
     const asset = (() => {
@@ -352,6 +373,7 @@ export function BattleIllustrationPanel({
           <div className="pt-1">
             <TachieGenerator
               prompt={prompt}
+              managedPromptId={null}
               mode="illustration"
               onImageUrlChange={(imageUrl) => {
                 setGeneratedImageUrl(imageUrl);

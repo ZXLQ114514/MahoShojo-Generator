@@ -165,6 +165,15 @@ ${answerText}
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: 'character.scenario.stream',
+          variables: {
+            language,
+            fieldsToKeepEmpty: normalizedEmptyFields.join(', '),
+            titleHint: typeof titleHint === 'string' ? titleHint.trim().slice(0, 60) : '',
+            answers: answerText,
+          },
+        },
         temperature: 0.75,
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
       },

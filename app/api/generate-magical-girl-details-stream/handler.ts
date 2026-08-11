@@ -321,6 +321,10 @@ ${qaText}
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: 'character.magical-girl.details-stream',
+          variables: { language, flowers, loreText, answers: qaText },
+        },
         temperature: 0.75,
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
       },

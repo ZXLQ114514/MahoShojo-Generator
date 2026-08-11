@@ -501,6 +501,16 @@ const magicalGirlDetailsConfig: GenerationConfig<MagicalGirlDetails, { answers: 
     const creatorSection = creatorPromptText ? `${creatorPromptText}\n\n` : '';
     return `请基于以下信息开始分析和预测：\n${creatorSection}${loreSection}【问卷回答】\n${questionAnswerPairs}\n\n可选的花名和对应的花语：${flowers}\n\n【重要指令】请你必须使用【${language}】进行内容创作。`;
   },
+  promptRefBuilder: ({ answers, language, loreText, creatorPromptText }) => ({
+    id: 'creator.magical-girl',
+    variables: {
+      answers: formatQuestionnaireAnswers(answers),
+      language,
+      loreText: loreText || '',
+      creatorPromptText: creatorPromptText || '',
+      flowers: getRandomFlowers(),
+    },
+  }),
   schema: MagicalGirlDetailsSchema,
   taskName: "生成魔法少女详细信息",
 }
@@ -520,6 +530,15 @@ const canshouGenerationConfig: GenerationConfig<CanshouDetails, { answers: Quest
     const creatorSection = creatorPromptText ? `${creatorPromptText}\n\n` : '';
     return `以下是调查员提交的问卷报告，请基于此进行分析：\n\n${creatorSection}${loreSection}${answerText}\n\n【重要指令】请你必须使用【${language}】进行内容创作。`;
   },
+  promptRefBuilder: ({ answers, language, loreText, creatorPromptText }) => ({
+    id: 'creator.canshou',
+    variables: {
+      answers: formatQuestionnaireAnswers(answers),
+      language,
+      loreText: loreText || '',
+      creatorPromptText: creatorPromptText || '',
+    },
+  }),
   schema: CanshouSchema,
   taskName: '生成残兽档案',
 };

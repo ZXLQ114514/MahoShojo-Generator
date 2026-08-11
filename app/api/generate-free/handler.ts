@@ -422,6 +422,15 @@ ${formatReferenceAttachmentsForPrompt(input.attachments)}
 用户提示词：
 ${input.prompt}
 `.trim(),
+      promptRefBuilder: (input) => ({
+        id: 'character.free',
+        variables: {
+          fieldGuide,
+          userPrompt: input.prompt,
+          attachments: formatReferenceAttachmentsForPrompt(input.attachments),
+          language: input.language,
+        },
+      }),
       schema,
       taskName: '自由生成数据卡',
       ...(customModelOverride ? { modelOverride: customModelOverride } : {}),

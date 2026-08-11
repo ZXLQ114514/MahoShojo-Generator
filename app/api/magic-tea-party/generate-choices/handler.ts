@@ -272,6 +272,16 @@ async function handler(req: NextRequest): Promise<Response> {
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: 'tea-party.choices',
+          variables: {
+            context: '角色、情景与世界书由后续服务端保护层按读取权限提供。',
+            messages: '对话记录由后续服务端保护层提供。',
+            choiceCount: String(settings.choiceCount ?? 3),
+            language: settings.language,
+          },
+          legacyMode: 'append',
+        },
         temperature: typeof settings.temperature === 'number' ? settings.temperature : 0.5,
       },
       {

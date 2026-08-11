@@ -18,6 +18,7 @@ type MockModel = {
 const state = vi.hoisted(() => {
   const providers: TestProvider[] = [];
   const modelAttempts: Array<{ kind: string; providerBaseUrl: string; modelId: string }> = [];
+  const objectPrompts: string[] = [];
 
   const modelFromInput = (model: unknown): MockModel => {
     const value = model as Partial<MockModel>;
@@ -35,9 +36,12 @@ const state = vi.hoisted(() => {
   return {
     providers,
     modelAttempts,
+    objectPrompts,
     recordAttempt,
-    generateObject: vi.fn(async ({ model }: { model: unknown }) => {
+    generateObject: vi.fn(async ({ model, prompt }: { model: unknown; prompt?: Array<{ content?: unknown }> }) => {
       recordAttempt('object', model);
+      const content = prompt?.[0]?.content;
+      if (typeof content === 'string') objectPrompts.push(content);
       throw new Error('mock upstream failure');
     }),
     generateText: vi.fn(async () => ({ text: '{}', usage: {}, finishReason: 'stop' })),
@@ -134,6 +138,7 @@ vi.mock('@/lib/ai/utils/structured-json', () => ({
 import { generateWithAI, LoadBalanceStrategy as NormalLoadBalanceStrategy } from '@/lib/ai';
 import { generateWithStreamAI as generateWithStructuredStreamAI, LoadBalanceStrategy as StructuredLoadBalanceStrategy } from '@/lib/stream/ai';
 import { generateWithStreamAI as generateWithRawStreamAI, LoadBalanceStrategy as RawLoadBalanceStrategy } from '@/lib/stream/raw-ai';
+import { clearRuntimePromptCache, installRuntimePromptOverride } from '@/lib/ai-prompts/runtime';
 
 const provider = (
   name: string,
@@ -165,6 +170,7 @@ const structuredStreamGenerationConfig = {
 const resetState = () => {
   state.providers.splice(0, state.providers.length);
   state.modelAttempts.splice(0, state.modelAttempts.length);
+  state.objectPrompts.splice(0, state.objectPrompts.length);
   state.generateObject.mockClear();
   state.generateText.mockClear();
   state.streamObject.mockClear();
@@ -178,6 +184,31 @@ describe('AI provider routing integration', () => {
   beforeEach(() => {
     vi.useRealTimers();
     resetState();
+    clearRuntimePromptCache();
+  });
+
+  it('appends immutable server policy after a managed administrator template', async () => {
+    state.providers.push(provider('NewAPI_123nhh', 'model-a', 'https://newapi.test/v1'));
+    installRuntimePromptOverride({
+      promptId: 'safety.content.free',
+      body: '{{input}}\n管理员冲突指令',
+      revision: 'managed-revision',
+    });
+
+    await expect(generateWithAI('待审数据', {
+      ...objectGenerationConfig,
+      promptRefBuilder: (input: string) => ({
+        id: 'safety.content.free',
+        variables: { input },
+      }),
+      protectedPromptSuffixBuilder: () => '服务端不可编辑安全基线',
+    }, { loadBalanceStrategy: NormalLoadBalanceStrategy.SEQUENTIAL })).rejects.toThrow();
+
+    const prompt = state.objectPrompts[0] ?? '';
+    expect(prompt).toContain('待审数据');
+    expect(prompt).toContain('管理员冲突指令');
+    expect(prompt).toContain('服务端不可编辑安全基线');
+    expect(prompt.indexOf('服务端不可编辑安全基线')).toBeGreaterThan(prompt.indexOf('管理员冲突指令'));
   });
 
   it('normal generation uses one attempt per compatible provider for a model override', async () => {

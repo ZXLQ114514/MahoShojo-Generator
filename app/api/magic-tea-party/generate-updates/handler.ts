@@ -244,6 +244,15 @@ async function handler(req: NextRequest): Promise<Response> {
       systemPrompt: '你是魔法茶会的角色更新助手。',
       temperature: 0.2,
       promptBuilder: buildMagicTeaPartyUpdatePrompt,
+      promptRefBuilder: (value) => ({
+        id: 'tea-party.updates',
+        variables: {
+          context: buildMagicTeaPartyUpdatePrompt(value),
+          messages: '对话记录已包含在上述安全裁剪上下文中。',
+          enabledFields: JSON.stringify({ writeArenaHistory, writeCurrentState }),
+          language: value.language ?? 'zh-CN',
+        },
+      }),
       schema: UpdateResponseSchema as any,
       taskName: '魔法茶会角色更新',
     }, {

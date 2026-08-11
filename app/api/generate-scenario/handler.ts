@@ -97,6 +97,18 @@ ${answerText}
     systemPrompt: "你是一位富有想象力的世界观构架师和剧本作家，擅长将零散的想法整合成结构化的故事场景。",
     temperature: 0.7,
     promptBuilder,
+    promptRefBuilder: () => ({
+      id: 'character.scenario',
+      variables: {
+        answers: Object.entries(answers)
+          .filter(([, value]) => value.trim() !== '')
+          .map(([key, value]) => `【${key}】\n${value}`)
+          .join('\n\n'),
+        fieldsToKeepEmpty: fieldsToKeepEmpty.join(', '),
+        titleHint: '',
+        language,
+      },
+    }),
     schema: ScenarioSchema,
     taskName: "生成情景",
   };

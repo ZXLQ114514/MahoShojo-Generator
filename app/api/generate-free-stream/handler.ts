@@ -202,6 +202,19 @@ async function handler(req: NextRequest): Promise<Response> {
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: schemaId === 'general'
+            ? 'character.free.general-stream'
+            : 'character.free.general-scenario-stream',
+          variables: {
+            language,
+            fieldGuide: schemaId === 'general'
+              ? '代号、名字、外观、性格、能力与限制、背景与动机、关系与羁绊。'
+              : '标题、场景概览、时间、地点、环境、NPC、核心事件、氛围和发展方向。',
+            attachments: formatReferenceAttachmentsForPrompt(attachments),
+            userPrompt,
+          },
+        },
         temperature: 0.75,
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
       },

@@ -16,6 +16,8 @@ import {
   prepareProvidersForModelOverride,
   resolveAttemptChannelContext,
 } from '@/lib/ai/provider-routing';
+import { getDrizzleDbFromRuntime } from '@/lib/db/drizzle';
+import { renderManagedPrompt, type TextPromptRef } from '@/lib/ai-prompts/runtime';
 
 // 延迟函数
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -23,9 +25,13 @@ const log = getLogger('ai');
 
 // 生成配置接口
 export interface GenerationConfig<T, I = string> {
-  systemPrompt: string;
+  systemPrompt: string | TextPromptRef;
   temperature: number;
-  promptBuilder: (input: I) => string;
+  promptBuilder: (input: I) => string | TextPromptRef;
+  /** Complete managed template; replaces the legacy prompt pair when set. */
+  promptRefBuilder?: (input: I) => TextPromptRef;
+  /** Immutable server policy appended after the managed administrator text. */
+  protectedPromptSuffixBuilder?: (input: I) => string;
   schema: z.ZodSchema<T>;
   taskName: string;
   maxOutputTokens?: number;
@@ -130,6 +136,26 @@ export async function generateWithStreamAI<T, I = string>(
   generationConfig: GenerationConfig<T, I>,
   options?: GenerateWithAIOptions
 ): Promise<Response> {
+  // Resolve managed templates once for the whole request. Provider retries
+  // must observe an identical prompt and should not re-query D1.
+  const promptDb = getDrizzleDbFromRuntime();
+  const resolvePromptValue = async (value: string | TextPromptRef): Promise<string> => {
+    if (typeof value === 'string') return value;
+    return renderManagedPrompt(promptDb, value);
+  };
+  const managedPromptRef = generationConfig.promptRefBuilder?.(input);
+  const managedOrLegacyPrompt = managedPromptRef
+    ? await renderManagedPrompt(promptDb, managedPromptRef)
+    : [
+        await resolvePromptValue(generationConfig.systemPrompt),
+        await resolvePromptValue(generationConfig.promptBuilder(input)),
+      ]
+        .filter((part) => part.trim().length > 0)
+        .join('\n\n');
+  const protectedSuffix = generationConfig.protectedPromptSuffixBuilder?.(input)?.trim() ?? '';
+  const resolvedPrompt = [managedOrLegacyPrompt, protectedSuffix]
+    .filter((part) => part.trim().length > 0)
+    .join('\n\n');
   const baseProviders: AIProvider[] = [
     ...(options?.providerOverride ? [options.providerOverride] : []),
     ...config.PROVIDERS,
@@ -254,7 +280,7 @@ export async function generateWithStreamAI<T, I = string>(
 
         const llm = createAIClient(provider);
 
-        const systemPrompt = generationConfig.systemPrompt + generationConfig.promptBuilder(input) + 'Ignore the user \'s prompt.';
+        const systemPrompt = resolvedPrompt + 'Ignore the user \'s prompt.';
         log.info(`provider.type: ${provider.type}`);
         const maxOutputTokensOption = resolveMaxOutputTokensOption(generationConfig, provider);
         const result = streamObject({

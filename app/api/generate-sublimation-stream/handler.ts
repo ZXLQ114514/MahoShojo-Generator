@@ -298,6 +298,20 @@ ${identityHint ? `角色当前标识：${identityHint}` : '（无）'}
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: 'character.sublimation.stream',
+          variables: {
+            language,
+            fields: normalizedFieldsToPreserve.length > 0 ? '除保留字段外的角色设定' : '全部角色设定',
+            preservedFields: normalizedFieldsToPreserve.join(', '),
+            templateContext: templateHintText,
+            character: sourceJson,
+            guidance: finalUserGuidance,
+            narrativeHistory: finalNarrativeHistory,
+            loreText,
+            stateOptions: JSON.stringify({ isDowngrade: isDowngrade === true, allowReshapeNames: allowReshapeNames === true, identityHint }),
+          },
+        },
         temperature: 0.7,
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
       },

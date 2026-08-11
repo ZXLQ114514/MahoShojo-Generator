@@ -754,6 +754,33 @@ async function handler(req: NextRequest): Promise<Response> {
 
         const generationConfig: RawGenerationConfig = {
             prompt: `${systemPrompt}\n\n${prompt}`,
+            promptRef: {
+                id: (() => {
+                    const internalGuidanceText = String(finalInternalGuidance ?? '');
+                    if (/PVP\s*裁判规则/i.test(internalGuidanceText)) return 'arena.pvp.override';
+                    if (/连续战报|章节/.test(internalGuidanceText)) return 'arena.continuous.chapter';
+                    if (mode === 'daily') return 'arena.mode.daily';
+                    if (mode === 'kizuna') return 'arena.mode.kizuna';
+                    if (mode === 'scenario') return 'arena.mode.scenario';
+                    const types = new Set(combatants.map((item: any) => item?.type));
+                    if (types.size === 1 && types.has('canshou')) return 'arena.mode.canshou-vs-canshou';
+                    if (types.has('magical-girl') && types.has('canshou') && types.size === 2) return 'arena.mode.magical-girl-vs-canshou';
+                    if (types.size === 1 && types.has('magical-girl')) return 'arena.mode.classic';
+                    return 'arena.mode.fallback';
+                })(),
+                variables: {
+                    combatants: '参战资料由后续服务端保护层按读取权限提供。',
+                    scenario: scenario ? '情景资料由后续服务端保护层提供。' : '',
+                    guidance: finalUserGuidance || '',
+                    language,
+                    canshouLore: '',
+                    actionInstruction: finalInternalGuidance || '',
+                    chapterPlan: '',
+                    context: '连续战报上下文由后续服务端保护层提供。',
+                    match: '对局资料由后续服务端保护层提供。',
+                },
+                legacyMode: 'append',
+            },
             temperature: 0.9,
         };
 

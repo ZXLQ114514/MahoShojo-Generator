@@ -8,6 +8,7 @@ import { authStorage } from '@/lib/auth';
 import { useAuth } from '@/lib/useAuth';
 import { configurationCatalog } from '@/lib/admin/configuration-catalog';
 import { AI_PROVIDER_CATALOG } from '@/lib/ai/constants';
+import { AiPromptManager } from '@/components/admin/AiPromptManager';
 
 type AdminCard = {
   id: string;
@@ -63,7 +64,7 @@ type AdminImageGenerationLicense = {
   revokedAt: string | null;
 };
 
-type Tab = 'cards' | 'reports' | 'users' | 'licenses' | 'settings';
+type Tab = 'cards' | 'reports' | 'users' | 'licenses' | 'prompts' | 'settings';
 type CardStatus = 'pending' | 'approved' | 'rejected' | 'all';
 type AdminUserPatch = { isBanned?: boolean; isAdmin?: boolean; isReviewExempt?: boolean; slotCount?: number };
 type CooldownSettings = { systemSeconds: number; freeSeconds: number; customSeconds: number; battleSeconds: number };
@@ -92,6 +93,7 @@ const cardTypeLabel: Record<string, string> = {
 export function AdminPage() {
   const { loading: authLoading, isAuthenticated, user: currentUser } = useAuth();
   const [tab, setTab] = useState<Tab>('cards');
+  const [promptDirty, setPromptDirty] = useState(false);
   const [status, setStatus] = useState<CardStatus>('pending');
   const [cardSearch, setCardSearch] = useState('');
   const [reportSearch, setReportSearch] = useState('');
@@ -183,7 +185,7 @@ export function AdminPage() {
       else if (tab === 'reports') await loadReports();
       else if (tab === 'users') await loadUsers();
       else if (tab === 'licenses') await loadLicenses();
-      else await loadSettings();
+      else if (tab === 'settings') await loadSettings();
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '管理员数据加载失败');
     } finally {
@@ -345,7 +347,14 @@ export function AdminPage() {
     }
   };
 
-  const title = useMemo(() => tab === 'cards' ? '角色卡审核' : tab === 'reports' ? '战报管理' : tab === 'users' ? '用户管理' : tab === 'licenses' ? '图片生成许可' : '系统设置', [tab]);
+  const title = useMemo(() => tab === 'cards' ? '角色卡审核' : tab === 'reports' ? '战报管理' : tab === 'users' ? '用户管理' : tab === 'licenses' ? '图片生成许可' : tab === 'prompts' ? 'AI 提示词' : '系统设置', [tab]);
+
+  const selectTab = (nextTab: Tab) => {
+    if (nextTab === tab) return;
+    if (tab === 'prompts' && promptDirty && !window.confirm('当前提示词草稿尚未保存，确定离开吗？')) return;
+    setPromptDirty(false);
+    setTab(nextTab);
+  };
 
   if (authLoading) return <main className="container py-10 text-sm text-gray-600">正在验证管理员身份…</main>;
   if (!isAuthenticated) return <main className="container py-10"><div className="rounded-lg border border-red-200 bg-red-50 p-5 text-red-800">请先登录后访问管理员工作台。</div></main>;
@@ -358,12 +367,22 @@ export function AdminPage() {
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">MahoShojo Control</p>
             <h1 className="text-2xl font-bold text-gray-900">管理员工作台</h1>
           </div>
-          <Link href="/" className="text-sm text-blue-600 hover:underline">返回首页</Link>
+          <Link
+            href="/"
+            onClick={(event) => {
+              if (tab === 'prompts' && promptDirty && !window.confirm('当前提示词草稿尚未保存，确定离开吗？')) {
+                event.preventDefault();
+              }
+            }}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            返回首页
+          </Link>
         </div>
 
         <div className="admin-page-tabs mb-4 flex gap-2 border-b border-gray-200">
-          {([['cards', '角色卡审核'], ['reports', '战报管理'], ['users', '用户管理'], ['licenses', '图片许可'], ['settings', '系统设置']] as const).map(([value, label]) => (
-            <button key={value} type="button" onClick={() => setTab(value)} className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}>
+          {([['cards', '角色卡审核'], ['reports', '战报管理'], ['users', '用户管理'], ['licenses', '图片许可'], ['prompts', 'AI 提示词'], ['settings', '系统设置']] as const).map(([value, label]) => (
+            <button key={value} type="button" onClick={() => selectTab(value)} className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}>
               {label}
             </button>
           ))}
@@ -387,12 +406,13 @@ export function AdminPage() {
               <div className="flex gap-2"><input value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadReports(); }} placeholder="搜索标题、作者或战报 ID" className="rounded border border-gray-300 px-3 py-2 text-sm" /><button type="button" onClick={() => void loadReports()} className="rounded bg-gray-900 px-3 py-2 text-sm text-white">刷新</button></div>
             ) : tab === 'licenses' ? (
               <button type="button" onClick={() => void loadLicenses()} className="rounded bg-gray-900 px-3 py-2 text-sm text-white">刷新</button>
-            ) : (
+            ) : tab === 'prompts' ? null : (
               <div className="flex gap-2"><input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadUsers(); }} placeholder="搜索用户名或邮箱" className="rounded border border-gray-300 px-3 py-2 text-sm" /><button type="button" onClick={() => void loadUsers()} className="rounded bg-gray-900 px-3 py-2 text-sm text-white">刷新</button></div>
             )}
           </div>
 
-          {loading ? <p className="py-8 text-center text-sm text-gray-500">加载中…</p> : null}
+          {tab === 'prompts' ? <AiPromptManager onDirtyChange={setPromptDirty} /> : null}
+          {loading && tab !== 'prompts' ? <p className="py-8 text-center text-sm text-gray-500">加载中…</p> : null}
           {!loading && tab === 'cards' ? <div className="space-y-3">{cards.map((card) => {
             const expanded = expandedCardId === card.id;
             return <article key={card.id} className="rounded-lg border border-gray-200 p-4">

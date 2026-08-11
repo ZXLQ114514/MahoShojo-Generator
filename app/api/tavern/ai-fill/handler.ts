@@ -154,6 +154,14 @@ async function handler(req: NextRequest): Promise<Response> {
 
 ${formatReferenceAttachmentsForPrompt(input.attachments)}
 `.trim(),
+        promptRefBuilder: (input) => ({
+          id: 'tavern.ai-fill',
+          variables: {
+            character: input.name,
+            attachments: formatReferenceAttachmentsForPrompt(input.attachments),
+            language: input.language,
+          },
+        }),
         schema: TavernAiFillSchema,
         taskName: '酒馆导出字段 AI 补全',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),

@@ -448,6 +448,15 @@ const magicalGirlDetailsConfig: GenerationConfig<MagicalGirlDetails, { answers: 
       : '';
     return `请基于以下信息开始分析和预测：\n${loreSection}【问卷回答】\n${questionAnswerPairs}\n\n可选的花名和对应的花语：${flowers}\n\n【重要指令】请你必须使用【${language}】进行内容创作。`;
   },
+  promptRefBuilder: ({ answers, language, loreText }) => ({
+    id: 'character.magical-girl.details',
+    variables: {
+      answers: formatQuestionnaireAnswers(answers),
+      language,
+      loreText: loreText || '',
+      flowers: getRandomFlowers(),
+    },
+  }),
   schema: MagicalGirlDetailsSchema,
   taskName: "生成魔法少女详细信息",
 }

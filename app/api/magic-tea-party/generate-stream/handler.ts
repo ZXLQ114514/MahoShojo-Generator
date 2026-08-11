@@ -319,6 +319,28 @@ async function handler(req: NextRequest): Promise<Response> {
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: 'tea-party.story',
+          variables: {
+            context: '角色、情景与世界书由后续服务端保护层按读取权限提供。',
+            messages: '对话记录由后续服务端保护层提供。',
+            summary: summary ?? '',
+            playerConstraint: playerRoleId
+              ? `玩家扮演 roleId=${playerRoleId}；不得代替该角色发言、决定或行动。`
+              : `玩家身份为 ${typeof settings.userDisplayName === 'string' && settings.userDisplayName.trim() ? settings.userDisplayName.trim().slice(0, 20) : '{{user}}'}；不得替玩家直接作出决定。`,
+            outputPlan: JSON.stringify(normalizeOutputPlan(settings.outputPlan)),
+            outputProtocol: settings.outputFormat === 'jsonl'
+              ? [
+                  '仅输出 JSONL，每行一个 JSON 对象，禁止代码块、围栏和解释。',
+                  'type 仅允许 narration、dialogue、choices、summary、updates、notice。',
+                  'narration 使用 text；dialogue 必须包含 speakerId、speakerName、text；notice 必须独立成行。',
+                  'level=error 时仅输出 notice。summary 与 updates 必须位于正文和 choices 之后。',
+                ].join('\n')
+              : '仅输出 Markdown 故事正文，禁止解释；若需提示则输出独立 mtp_notice 块，level=error 时只输出 notice。',
+            language: settings.language,
+          },
+          legacyMode: 'append',
+        },
         temperature: typeof settings.temperature === 'number' ? settings.temperature : 0.75,
       },
       {

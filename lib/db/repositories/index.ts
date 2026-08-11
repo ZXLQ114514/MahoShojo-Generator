@@ -30,3 +30,4 @@ export * from '@/lib/db/repositories/report-appeals';
 export * from '@/lib/db/repositories/crowd-review';
 export * from '@/lib/db/repositories/admin';
 export * from '@/lib/db/repositories/image-generation-licenses';
+export * from '@/lib/ai-prompts/repository';
