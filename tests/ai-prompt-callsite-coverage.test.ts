@@ -15,6 +15,10 @@ const AI_WRAPPER_FILES = new Set([
 const EXTERNAL_MANAGED_CONFIGS: Readonly<Record<string, readonly string[]>> = {
   'app/api/generate-game-card/handler.ts': ['lib/game-card/config.ts'],
 };
+const SHARED_MANAGED_CONFIG_CALLS = new Set([
+  // The fallback call reuses baseConfig with a different modelOverride.
+  'lib/review/auto-data-card-review.ts',
+]);
 
 const toRepoPath = (filePath: string): string =>
   path.relative(ROOT, filePath).split(path.sep).join('/');
@@ -40,7 +44,7 @@ const sourceByPath = new Map(
   sourceFiles.map((filePath) => [toRepoPath(filePath), readFileSync(filePath, 'utf8')]),
 );
 
-const hasDirectAiCall = (repoPath: string, source: string): boolean => {
+const countDirectAiCalls = (repoPath: string, source: string): number => {
   const sourceFile = ts.createSourceFile(
     repoPath,
     source,
@@ -48,20 +52,19 @@ const hasDirectAiCall = (repoPath: string, source: string): boolean => {
     true,
     repoPath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
-  let found = false;
+  let count = 0;
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node)
       && ts.isIdentifier(node.expression)
       && (node.expression.text === 'generateWithAI' || node.expression.text === 'generateWithStreamAI')
     ) {
-      found = true;
-      return;
+      count += 1;
     }
-    if (!found) ts.forEachChild(node, visit);
+    ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return found;
+  return count;
 };
 
 describe('managed AI prompt production coverage', () => {
@@ -70,13 +73,17 @@ describe('managed AI prompt production coverage', () => {
 
     for (const [repoPath, source] of sourceByPath) {
       if (AI_WRAPPER_FILES.has(repoPath)) continue;
-      if (!hasDirectAiCall(repoPath, source)) continue;
+      const directCallCount = countDirectAiCalls(repoPath, source);
+      if (directCallCount === 0) continue;
 
       const relatedSources = [
         source,
         ...(EXTERNAL_MANAGED_CONFIGS[repoPath] ?? []).map((configPath) => sourceByPath.get(configPath) ?? ''),
       ].join('\n');
-      if (!/\bpromptRef(?:Builder)?\s*:/.test(relatedSources)) uncovered.push(repoPath);
+      const managedRefCount = relatedSources.match(/\bpromptRef(?:Builder)?\s*:/g)?.length ?? 0;
+      if (managedRefCount < directCallCount && !SHARED_MANAGED_CONFIG_CALLS.has(repoPath)) {
+        uncovered.push(`${repoPath} (${directCallCount} calls, ${managedRefCount} refs)`);
+      }
     }
 
     expect(uncovered, 'Direct AI call sites without promptRef/promptRefBuilder').toEqual([]);
@@ -92,5 +99,36 @@ describe('managed AI prompt production coverage', () => {
       .map((definition) => definition.id);
 
     expect(unreferenced, 'Active prompt IDs without a production source reference').toEqual([]);
+  });
+
+  test('business modules cannot bypass the managed AI wrappers', () => {
+    const sdkFunctions = new Set(['generateObject', 'generateText', 'streamObject', 'streamText']);
+    const bypasses: string[] = [];
+
+    for (const [repoPath, source] of sourceByPath) {
+      if (AI_WRAPPER_FILES.has(repoPath)) continue;
+      const sourceFile = ts.createSourceFile(
+        repoPath,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        repoPath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      );
+      for (const statement of sourceFile.statements) {
+        if (
+          !ts.isImportDeclaration(statement)
+          || !ts.isStringLiteral(statement.moduleSpecifier)
+          || statement.moduleSpecifier.text !== 'ai'
+        ) continue;
+        const namedBindings = statement.importClause?.namedBindings;
+        if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+        for (const element of namedBindings.elements) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (sdkFunctions.has(importedName)) bypasses.push(`${repoPath}:${importedName}`);
+        }
+      }
+    }
+
+    expect(bypasses, 'Business modules importing Vercel AI generation APIs directly').toEqual([]);
   });
 });
