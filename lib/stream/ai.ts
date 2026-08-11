@@ -6,7 +6,8 @@ import { z } from 'zod/v3';
 import { config, AIProvider } from "../config";
 import { getLogger } from "../logger";
 import { getProviderFetch } from "@/lib/ai/middleware/provider-fetch";
-import { resolveMaxOutputTokensOption } from "@/lib/ai/max-output-tokens";
+import { resolveGenerationSettings } from "@/lib/ai/generation-settings/resolve";
+import type { GenerationSettingsContext, UserGenerationOverrides } from "@/lib/ai/generation-settings/types";
 import {
   createAttemptOutcomeRecorder,
   wrapResponseWithAttemptOutcome,
@@ -26,7 +27,7 @@ const log = getLogger('ai');
 // 生成配置接口
 export interface GenerationConfig<T, I = string> {
   systemPrompt: string | TextPromptRef;
-  temperature: number;
+  temperature?: number;
   promptBuilder: (input: I) => string | TextPromptRef;
   /** Complete managed template; replaces the legacy prompt pair when set. */
   promptRefBuilder?: (input: I) => TextPromptRef;
@@ -36,6 +37,9 @@ export interface GenerationConfig<T, I = string> {
   taskName: string;
   maxOutputTokens?: number;
   modelOverride?: string; // 新增：可选的模型覆盖参数
+  generationOverrides?: UserGenerationOverrides;
+  /** 生成设置上下文：system/custom 通道统一传递 providerId 与用户覆盖。 */
+  generationSettingsContext?: GenerationSettingsContext;
 }
 
 const createAIClient = (provider: AIProvider) => {
@@ -128,6 +132,8 @@ export interface GenerateWithAIOptions {
     providerId: string;
     modelId: string;
   };
+  /** 生成设置上下文：system/custom 通道统一传递 providerId 与用户覆盖。 */
+  generationSettingsContext?: GenerationSettingsContext;
 }
 
 // 通用 AI 生成函数
@@ -158,7 +164,11 @@ export async function generateWithStreamAI<T, I = string>(
     .join('\n\n');
   const baseProviders: AIProvider[] = [
     ...(options?.providerOverride ? [options.providerOverride] : []),
-    ...config.PROVIDERS,
+    ...config.PROVIDERS.map((provider) => ({
+      ...provider,
+      // config.PROVIDERS 属于系统通道；显式标记后才能命中 system::<model> 能力登记。
+      providerId: provider.providerId ?? 'system',
+    })),
   ];
 
   if (baseProviders.length === 0) {
@@ -282,7 +292,27 @@ export async function generateWithStreamAI<T, I = string>(
 
         const systemPrompt = resolvedPrompt + 'Ignore the user \'s prompt.';
         log.info(`provider.type: ${provider.type}`);
-        const maxOutputTokensOption = resolveMaxOutputTokensOption(generationConfig, provider);
+        const resolvedSettings = resolveGenerationSettings({
+          providerId: options?.generationSettingsContext?.providerId ?? generationConfig.generationSettingsContext?.providerId ?? provider.providerId ?? provider.type,
+          modelId: selectedModel,
+          taskDefaults: {
+            temperature: generationConfig.temperature,
+            maxOutputTokens: generationConfig.maxOutputTokens,
+          },
+          providerDefaults: provider,
+          userOverrides:
+            options?.generationSettingsContext?.userOverrides ??
+            generationConfig.generationSettingsContext?.userOverrides ??
+            provider.generationOverrides ??
+            generationConfig.generationOverrides,
+        });
+        if (resolvedSettings.diagnostics.omitted.length > 0 || resolvedSettings.diagnostics.warnings.length > 0) {
+          log.warn('生成参数解析诊断', {
+            provider: provider.name,
+            model: selectedModel,
+            ...resolvedSettings.diagnostics,
+          });
+        }
         const result = streamObject({
           model: provider.type === 'openai' ? llm.chat(selectedModel) : llm(selectedModel), // Type assertion for AI SDK 5 compatibility
           // 应对风控，尝试直接全部放入系统提示词中
@@ -301,9 +331,9 @@ export async function generateWithStreamAI<T, I = string>(
             }
           ],
           schema: generationConfig.schema,
-          temperature: generationConfig.temperature,
           maxRetries: 0,
-          ...maxOutputTokensOption,
+          ...resolvedSettings.standardOptions,
+          ...(resolvedSettings.providerOptions ? { providerOptions: resolvedSettings.providerOptions } : {}),
           onError: ({ error }) => {
             log.error(`streamObject 流式传输出错: 提供商: ${provider.name}`, { error });
             outcomeRecorder.recordFromError(error);

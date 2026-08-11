@@ -55,7 +55,7 @@ class AdminPromptRequestError extends Error {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  character: '角色生成', creator: 'Creator', tavern: 'Tavern', arena: '竞技场 / PVP', safety: '内容安全', review: '审核与分析', 'tea-party': '魔法茶会', image: '图像提示词', schema: 'Schema 约束',
+  character: '角色生成', creator: 'Creator', tavern: 'Tavern', arena: '竞技场 / PVP', safety: '内容安全', review: '审核与分析', 'tea-party': '魔法茶会', 'card-forge': '卡牌工坊', image: '图像提示词', schema: 'Schema 约束',
 };
 const MANAGEMENT_MODE_LABELS: Record<ManagedPrompt['managementMode'], string> = {
   replace: '完整替换', overlay: '叠加保护层', mixed: '结构化替换 / 流式保护', inventory: '仅盘点',

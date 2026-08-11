@@ -1,4 +1,5 @@
 import { z } from 'zod/v3';
+import { UserGenerationOverridesSchema } from '@/lib/ai/generation-settings/schemas';
 import { NextRequest } from 'next/server';
 
 import questionnaire from '@/public/questionnaires/presets/magical-girl-default.json';
@@ -38,6 +39,7 @@ const CustomProviderSchema = z.object({
   modelId: z.string().min(1),
   apiKey: z.string(),
   maxOutputTokens: z.number().int().min(1).max(1_000_000).optional(),
+  generationOverrides: UserGenerationOverridesSchema.optional(),
 });
 
 const AttachmentSchema = z
@@ -428,7 +430,7 @@ const resolveProviderOverride = (payload: unknown): CustomProviderResolveResult 
       ok: true,
       customProviderOverride: null,
       customProviderId: providerConfig.id,
-      customModelOverride: modelResolution.modelId,
+      customModelOverride: modelResolution.modelId === 'default' ? undefined : modelResolution.modelId,
     };
   }
 
@@ -444,6 +446,8 @@ const resolveProviderOverride = (payload: unknown): CustomProviderResolveResult 
       retryCount: 1,
       skipProbability: 0,
       ...(typeof parsed.maxOutputTokens === 'number' ? { defaultMaxOutputTokens: parsed.maxOutputTokens } : {}),
+      providerId: parsed.providerId,
+      ...(parsed.generationOverrides ? { generationOverrides: parsed.generationOverrides } : {}),
     },
     customProviderId: providerConfig.id,
     customModelOverride: undefined,
@@ -547,6 +551,7 @@ async function handler(req: NextRequest): Promise<Response> {
         schema,
         taskName: '酒馆导入：魔法少女 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
+        ...(customProviderPayload ? { generationSettingsContext: { providerId: customProviderPayload.providerId, ...(customProviderPayload.generationOverrides ? { userOverrides: customProviderPayload.generationOverrides } : {}) } } : {}),
       };
 
       const generated = await generateWithAI({ language, sourceName, attachments }, generationConfig, aiOptions);
@@ -604,6 +609,7 @@ async function handler(req: NextRequest): Promise<Response> {
         schema,
         taskName: '酒馆导入：残兽 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
+        ...(customProviderPayload ? { generationSettingsContext: { providerId: customProviderPayload.providerId, ...(customProviderPayload.generationOverrides ? { userOverrides: customProviderPayload.generationOverrides } : {}) } } : {}),
       };
 
       const generated = await generateWithAI({ language, sourceName, attachments }, generationConfig, aiOptions);
@@ -658,6 +664,7 @@ async function handler(req: NextRequest): Promise<Response> {
         schema,
         taskName: '酒馆导入：情景 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
+        ...(customProviderPayload ? { generationSettingsContext: { providerId: customProviderPayload.providerId, ...(customProviderPayload.generationOverrides ? { userOverrides: customProviderPayload.generationOverrides } : {}) } } : {}),
       };
 
       const generated = await generateWithAI({ language, sourceName, attachments }, generationConfig, aiOptions);
@@ -697,6 +704,7 @@ async function handler(req: NextRequest): Promise<Response> {
         schema,
         taskName: '酒馆导入：通用情景 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
+        ...(customProviderPayload ? { generationSettingsContext: { providerId: customProviderPayload.providerId, ...(customProviderPayload.generationOverrides ? { userOverrides: customProviderPayload.generationOverrides } : {}) } } : {}),
       };
 
       const generated = await generateWithAI({ language, sourceName, attachments }, generationConfig, aiOptions);
@@ -736,6 +744,7 @@ async function handler(req: NextRequest): Promise<Response> {
       schema,
       taskName: '酒馆导入：通用角色 AI 转换',
       ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
+      ...(customProviderPayload ? { generationSettingsContext: { providerId: customProviderPayload.providerId, ...(customProviderPayload.generationOverrides ? { userOverrides: customProviderPayload.generationOverrides } : {}) } } : {}),
     };
 
     const generated = await generateWithAI({ language, sourceName, attachments }, generationConfig, aiOptions);

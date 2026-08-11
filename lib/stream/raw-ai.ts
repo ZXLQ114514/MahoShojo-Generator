@@ -5,7 +5,12 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { config, AIProvider } from "../config";
 import { getLogger } from "../logger";
 import { getProviderFetch } from "@/lib/ai/middleware/provider-fetch";
-import { resolveMaxOutputTokensOption } from "@/lib/ai/max-output-tokens";
+import { resolveGenerationSettings } from "@/lib/ai/generation-settings/resolve";
+import type {
+    GenerationProviderOptions,
+    GenerationSettingsContext,
+    UserGenerationOverrides,
+} from "@/lib/ai/generation-settings/types";
 import { extractUpstreamErrorMessage, enhanceErrorWithUpstreamMessage } from "@/lib/ai/utils/error-extraction";
 import {
     createAttemptOutcomeRecorder,
@@ -34,9 +39,12 @@ export interface RawGenerationConfig {
     prompt: string | TextPromptRef;
     /** Optional complete managed template replacing the legacy prompt. */
     promptRef?: TextPromptRef;
-    temperature: number;
+    temperature?: number;
     maxOutputTokens?: number;
     modelOverride?: string; // 新增：可选的模型覆盖参数
+    generationOverrides?: UserGenerationOverrides;
+    /** 生成设置上下文：system/custom 通道统一传递 providerId 与用户覆盖。 */
+    generationSettingsContext?: GenerationSettingsContext;
 }
 
 const createAIClient = (provider: AIProvider) => {
@@ -167,11 +175,36 @@ export interface GenerateWithAIOptions {
         providerId: string;
         modelId: string;
     };
+    /** 生成设置上下文：system/custom 通道统一传递 providerId 与用户覆盖。 */
+    generationSettingsContext?: GenerationSettingsContext;
 }
 
 export const buildStreamTextAbortOptions = (abortSignal?: AbortSignal): { abortSignal?: AbortSignal } => (
     abortSignal ? { abortSignal } : {}
 );
+
+export const resolveRawStreamProviderOptions = (
+    providerType: AIProvider['type'],
+    modelId: string,
+    providerOptions?: GenerationProviderOptions,
+): GenerationProviderOptions | undefined => {
+    if (providerType !== 'google' || !/^gemini/i.test(modelId.trim())) {
+        return providerOptions;
+    }
+
+    const googleOptions = providerOptions?.google;
+    if (googleOptions && Object.prototype.hasOwnProperty.call(googleOptions, 'thinkingConfig')) {
+        return providerOptions;
+    }
+
+    return {
+        ...providerOptions,
+        google: {
+            ...googleOptions,
+            thinkingConfig: { includeThoughts: true },
+        },
+    };
+};
 
 // 通用 AI 生成函数
 export async function generateWithStreamAI(
@@ -199,7 +232,11 @@ export async function generateWithStreamAI(
           : managedPrompt;
     const baseProviders: AIProvider[] = [
         ...(options?.providerOverride ? [options.providerOverride] : []),
-        ...config.PROVIDERS,
+        ...config.PROVIDERS.map((provider) => ({
+            ...provider,
+            // config.PROVIDERS 属于系统通道；显式标记后才能命中 system::<model> 能力登记。
+            providerId: provider.providerId ?? 'system',
+        })),
     ];
 
     if (baseProviders.length === 0) {
@@ -329,21 +366,32 @@ export async function generateWithStreamAI(
                 }
 
 	                const llm = createAIClient(provider);
-	                const maxOutputTokensOption = resolveMaxOutputTokensOption(generationConfig, provider);
-	                const shouldEnableGoogleThinking =
-	                    provider.type === 'google' && typeof selectedModel === 'string' && /^gemini/i.test(selectedModel.trim());
-	                const googleThinkingOptions =
-	                    shouldEnableGoogleThinking
-	                        ? {
-	                            providerOptions: {
-	                                google: {
-	                                    thinkingConfig: {
-	                                        includeThoughts: true,
-	                                    },
-	                                },
-	                            },
-	                        }
-	                        : {};
+	                const resolvedSettings = resolveGenerationSettings({
+	                    providerId: options?.generationSettingsContext?.providerId ?? generationConfig.generationSettingsContext?.providerId ?? provider.providerId ?? provider.type,
+	                    modelId: selectedModel,
+	                    taskDefaults: {
+	                        temperature: generationConfig.temperature,
+	                        maxOutputTokens: generationConfig.maxOutputTokens,
+	                    },
+	                    providerDefaults: provider,
+	                    userOverrides:
+	                        options?.generationSettingsContext?.userOverrides ??
+	                        generationConfig.generationSettingsContext?.userOverrides ??
+	                        provider.generationOverrides ??
+	                        generationConfig.generationOverrides,
+	                });
+	                const providerOptions = resolveRawStreamProviderOptions(
+	                    provider.type,
+	                    selectedModel,
+	                    resolvedSettings.providerOptions,
+	                );
+	                if (resolvedSettings.diagnostics.omitted.length > 0 || resolvedSettings.diagnostics.warnings.length > 0) {
+	                    log.warn('生成参数解析诊断', {
+	                        provider: provider.name,
+	                        model: selectedModel,
+	                        ...resolvedSettings.diagnostics,
+	                    });
+	                }
 
 		                const looksLikeTrivialEmptyOutput = (text: string) => {
 		                    const trimmed = text.trim().replace(/^\uFEFF/, '');
@@ -368,11 +416,10 @@ export async function generateWithStreamAI(
                             content: resolvedPrompt,
                         },
                     ],
-                    temperature: generationConfig.temperature,
                     maxRetries: 0,
-                    ...maxOutputTokensOption,
+                    ...resolvedSettings.standardOptions,
                     ...buildStreamTextAbortOptions(options?.abortSignal),
-                    ...googleThinkingOptions,
+                    ...(providerOptions ? { providerOptions } : {}),
                     onError: ({ error }) => {
                         capturedError = error;
                         log.error(`流式传输过程中出错: 提供商: ${provider.name} 模型: ${selectedModel}`, { error });

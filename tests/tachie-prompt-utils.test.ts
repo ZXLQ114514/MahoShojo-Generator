@@ -37,4 +37,14 @@ describe('image prompt appearance formatter', () => {
     expect(prompt).not.toContain('# 角色档案');
     expect(prompt).not.toContain('\n- 能力');
   });
+
+  test('超长外观资料不会截掉末尾的禁文字硬约束', () => {
+    const prompt = buildCharacterPortraitPrompt({
+      appearance: `银发蓝眼，${'精细服装纹理，'.repeat(1_200)}`,
+      characterType: 'magical-girl',
+    });
+
+    expect(prompt).toContain('精细服装纹理');
+    expect(prompt.endsWith('输出：只生成一张没有任何可读文字的插画画面。')).toBe(true);
+  });
 });
