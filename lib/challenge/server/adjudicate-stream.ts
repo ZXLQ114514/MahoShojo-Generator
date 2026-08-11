@@ -193,6 +193,15 @@ export const generateChallengeAttemptStreamFromAi = async (
   const streamResult = await generateWithStreamAI(
     {
       prompt: buildChallengeAdjudicationPrompt(input),
+      promptRef: {
+        id: 'arena.challenge.adjudication',
+        variables: {
+          combatants: '敌我快照由后续服务端保护层按字段白名单提供。',
+          action: '玩家行动由后续服务端保护层提供。',
+          resolverEnvelope: '规则信封由后续服务端保护层提供。',
+        },
+        legacyMode: 'append',
+      },
       temperature: 0.6,
       maxOutputTokens: 1_600,
       ...(options?.modelOverride ? { modelOverride: options.modelOverride } : {}),

@@ -138,6 +138,13 @@ async function handler(req: NextRequest): Promise<Response> {
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: mode === 'title' ? 'tea-party.title' : 'tea-party.summary',
+          variables: {
+            messages: JSON.stringify(messages),
+            language,
+          },
+        },
         temperature: mode === 'title' ? 0.2 : 0.3,
       },
       providerOptions

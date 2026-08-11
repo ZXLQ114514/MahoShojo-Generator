@@ -414,6 +414,14 @@ const canshouGenerationConfig: GenerationConfig<CanshouDetails, { answers: Quest
       : '';
     return `以下是调查员提交的问卷报告，请基于此进行分析：\n\n${loreSection}${answerText}\n\n【重要指令】请你必须使用【${language}】进行内容创作。`;
   },
+  promptRefBuilder: ({ answers, language, loreText }) => ({
+    id: 'character.canshou.details',
+    variables: {
+      answers: formatQuestionnaireAnswers(answers),
+      language,
+      loreText: loreText || '',
+    },
+  }),
   schema: CanshouSchema,
   taskName: "生成残兽档案",
 };

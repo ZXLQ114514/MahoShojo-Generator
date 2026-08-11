@@ -182,23 +182,31 @@ async function handler(req: NextRequest): Promise<Response> {
       enableCurrentState: writeCurrentState,
     });
     type RedoResult = z.infer<typeof schema>;
+    const redoPrompt = createRedoCombatantUpdatesPrompt({
+      battleReportMarkdown: reportMarkdown,
+      combatants: verifiedCombatants.map((c: any) => ({
+        name: (c?.data?.codename || c?.data?.name || '').toString(),
+        type: (c?.type || '角色').toString(),
+        currentState: c?.data?.current_state ?? null,
+      })),
+      mode,
+      winner: parsedReport.winner,
+      writeArenaHistory,
+      writeCurrentState,
+    });
 
     const generationConfig: GenerationConfig<RedoResult, null> = {
       systemPrompt: '你只需要输出 JSON。',
       temperature: 0.4,
-      promptBuilder: () =>
-        createRedoCombatantUpdatesPrompt({
-          battleReportMarkdown: reportMarkdown,
-          combatants: verifiedCombatants.map((c: any) => ({
-            name: (c?.data?.codename || c?.data?.name || '').toString(),
-            type: (c?.type || '角色').toString(),
-            currentState: c?.data?.current_state ?? null,
-          })),
-          mode,
-          winner: parsedReport.winner,
-          writeArenaHistory,
-          writeCurrentState,
-        }),
+      promptBuilder: () => redoPrompt,
+      promptRefBuilder: () => ({
+        id: 'arena.redo-updates',
+        variables: {
+          report: ['你只需要输出 JSON。', redoPrompt].join('\n\n'),
+          characters: '角色名称、类型与当前状态已包含在服务端安全构建的战报基线中。',
+          writeOptions: '允许写入字段已包含在服务端安全构建的战报基线中。',
+        },
+      }),
       schema,
       taskName: '重做角色更新',
       modelOverride: customModelOverride,

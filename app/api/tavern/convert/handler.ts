@@ -533,6 +533,17 @@ async function handler(req: NextRequest): Promise<Response> {
             sourceName: input.sourceName,
             attachments: input.attachments,
           }),
+        promptRefBuilder: (input) => ({
+          id: 'tavern.convert.magical-girl',
+          variables: {
+            sourceName: input.sourceName,
+            language: input.language,
+            attachments: [
+              '你的任务是创作具有指定数据结构的内容。',
+              buildMagicalGirlPrompt(input),
+            ].join('\n\n'),
+          },
+        }),
         schema,
         taskName: '酒馆导入：魔法少女 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
@@ -579,6 +590,17 @@ async function handler(req: NextRequest): Promise<Response> {
             sourceName: input.sourceName,
             attachments: input.attachments,
           }),
+        promptRefBuilder: (input) => ({
+          id: 'tavern.convert.canshou',
+          variables: {
+            sourceName: input.sourceName,
+            language: input.language,
+            attachments: [
+              '你的任务是创作具有指定数据结构的内容。',
+              buildCanshouPrompt(input),
+            ].join('\n\n'),
+          },
+        }),
         schema,
         taskName: '酒馆导入：残兽 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
@@ -622,6 +644,17 @@ async function handler(req: NextRequest): Promise<Response> {
             sourceName: input.sourceName,
             attachments: input.attachments,
           }),
+        promptRefBuilder: (input) => ({
+          id: 'tavern.convert.scenario',
+          variables: {
+            sourceName: input.sourceName,
+            language: input.language,
+            attachments: [
+              '你的任务是创作具有指定数据结构的内容。',
+              buildScenarioPrompt(input),
+            ].join('\n\n'),
+          },
+        }),
         schema,
         taskName: '酒馆导入：情景 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
@@ -650,6 +683,17 @@ async function handler(req: NextRequest): Promise<Response> {
             sourceName: input.sourceName,
             attachments: input.attachments,
           }),
+        promptRefBuilder: (input) => ({
+          id: 'tavern.convert.general-scenario',
+          variables: {
+            sourceName: input.sourceName,
+            language: input.language,
+            attachments: [
+              '你的任务是创作具有指定数据结构的内容。',
+              buildGeneralScenarioPrompt(input),
+            ].join('\n\n'),
+          },
+        }),
         schema,
         taskName: '酒馆导入：通用情景 AI 转换',
         ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
@@ -678,6 +722,17 @@ async function handler(req: NextRequest): Promise<Response> {
           sourceName: input.sourceName,
           attachments: input.attachments,
         }),
+      promptRefBuilder: (input) => ({
+        id: 'tavern.convert.general',
+        variables: {
+          sourceName: input.sourceName,
+          language: input.language,
+          attachments: [
+            '你的任务是创作具有指定数据结构的内容。',
+            buildGeneralPrompt(input),
+          ].join('\n\n'),
+        },
+      }),
       schema,
       taskName: '酒馆导入：通用角色 AI 转换',
       ...(customModelOverride ? { modelOverride: customModelOverride } : {}),

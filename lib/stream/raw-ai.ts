@@ -22,6 +22,8 @@ import {
     STREAM_READ_TOTAL_TIMEOUT_MS,
     type StreamReadTimeoutMode,
 } from "@/lib/stream/timeout";
+import { getDrizzleDbFromRuntime } from '@/lib/db/drizzle';
+import { renderManagedPrompt, type TextPromptRef } from '@/lib/ai-prompts/runtime';
 
 // 延迟函数
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -29,7 +31,9 @@ const log = getLogger('ai');
 
 // 生成配置接口
 export interface RawGenerationConfig {
-    prompt: string;
+    prompt: string | TextPromptRef;
+    /** Optional complete managed template replacing the legacy prompt. */
+    promptRef?: TextPromptRef;
     temperature: number;
     maxOutputTokens?: number;
     modelOverride?: string; // 新增：可选的模型覆盖参数
@@ -179,6 +183,20 @@ export async function generateWithStreamAI(
     finishReasonPromise?: Promise<unknown>;
     telemetry?: GenerateWithAIOptions['telemetry'];
 }> {
+    // Resolve managed templates once before provider retries. A retry must use
+    // the same rendered prompt and must not perform another D1 lookup.
+    const promptDb = getDrizzleDbFromRuntime();
+    const legacyPrompt = typeof generationConfig.prompt === 'string'
+        ? generationConfig.prompt
+        : await renderManagedPrompt(promptDb, generationConfig.prompt);
+    const managedPrompt = generationConfig.promptRef
+        ? await renderManagedPrompt(promptDb, generationConfig.promptRef)
+        : null;
+    const resolvedPrompt = managedPrompt === null
+        ? legacyPrompt
+        : generationConfig.promptRef?.legacyMode === 'append'
+          ? [managedPrompt, legacyPrompt].filter((part) => part.trim()).join('\n\n')
+          : managedPrompt;
     const baseProviders: AIProvider[] = [
         ...(options?.providerOverride ? [options.providerOverride] : []),
         ...config.PROVIDERS,
@@ -347,7 +365,7 @@ export async function generateWithStreamAI(
                     prompt: [
                         {
                             role: 'user',
-                            content: generationConfig.prompt,
+                            content: resolvedPrompt,
                         },
                     ],
                     temperature: generationConfig.temperature,

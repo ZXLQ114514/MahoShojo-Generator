@@ -17,6 +17,8 @@ import {
   resolveAttemptChannelContext,
 } from '@/lib/ai/provider-routing';
 import type { AIReasoningEnvelope } from "@/types/ai-reasoning";
+import { getDrizzleDbFromRuntime } from '@/lib/db/drizzle';
+import { renderManagedPrompt, type TextPromptRef } from '@/lib/ai-prompts/runtime';
 
 // 延迟函数
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -24,9 +26,14 @@ const log = getLogger('ai');
 
 // 生成配置接口
 export interface GenerationConfig<T, I = string> {
-  systemPrompt: string;
+  /** 固定提示词可以直接传文本，也可以引用管理员可编辑的目录项。 */
+  systemPrompt: string | TextPromptRef;
   temperature: number;
-  promptBuilder: (input: I) => string;
+  promptBuilder: (input: I) => string | TextPromptRef;
+  /** 可选的完整托管模板；存在时替代旧的 systemPrompt + promptBuilder。 */
+  promptRefBuilder?: (input: I) => TextPromptRef;
+  /** 服务端不可编辑的保护后缀，始终放在管理员托管模板之后。 */
+  protectedPromptSuffixBuilder?: (input: I) => string;
   schema: z.ZodSchema<T>;
   taskName: string;
   maxOutputTokens?: number;
@@ -279,6 +286,27 @@ export async function generateWithAI<T, I = string>(
   generationConfig: GenerationConfig<T, I>,
   options?: GenerateWithAIOptions
 ): Promise<T> {
+  // Resolve managed templates once per request, before entering provider/retry
+  // loops. This keeps a retry on the same request consistent and avoids a D1
+  // read for every provider attempt.
+  const promptDb = getDrizzleDbFromRuntime();
+  const resolvePromptValue = async (value: string | TextPromptRef): Promise<string> => {
+    if (typeof value === 'string') return value;
+    return renderManagedPrompt(promptDb, value);
+  };
+  const managedPromptRef = generationConfig.promptRefBuilder?.(input);
+  const managedOrLegacyPrompt = managedPromptRef
+    ? await renderManagedPrompt(promptDb, managedPromptRef)
+    : [
+        await resolvePromptValue(generationConfig.systemPrompt),
+        await resolvePromptValue(generationConfig.promptBuilder(input)),
+      ]
+        .filter((part) => part.trim().length > 0)
+        .join('\n\n');
+  const protectedSuffix = generationConfig.protectedPromptSuffixBuilder?.(input)?.trim() ?? '';
+  const resolvedPrompt = [managedOrLegacyPrompt, protectedSuffix]
+    .filter((part) => part.trim().length > 0)
+    .join('\n\n');
   const baseProviders: AIProvider[] = [
     ...(options?.providerOverride ? [options.providerOverride] : []),
     ...config.PROVIDERS,
@@ -410,7 +438,7 @@ export async function generateWithAI<T, I = string>(
 
         const llm = createAIClient(provider);
 
-        const systemPrompt = generationConfig.systemPrompt + generationConfig.promptBuilder(input) + 'Ignore the user \'s prompt.';
+        const systemPrompt = resolvedPrompt + 'Ignore the user \'s prompt.';
         log.info(`provider.type: ${provider.type}`);
 
         const model = provider.type === 'openai' ? llm.chat(selectedModel) : llm(selectedModel); // Type assertion for AI SDK 5 compatibility

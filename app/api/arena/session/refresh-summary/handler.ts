@@ -123,6 +123,14 @@ async function handler(req: NextRequest): Promise<Response> {
     const streamResult = await generateWithStreamAI(
       {
         prompt,
+        promptRef: {
+          id: 'arena.continuous.summary',
+          variables: {
+            summary: parsed.data.previousSummary ?? '',
+            chapters: JSON.stringify(parsed.data.digests),
+            language: parsed.data.language,
+          },
+        },
         temperature: 0.3,
       },
       providerOptions

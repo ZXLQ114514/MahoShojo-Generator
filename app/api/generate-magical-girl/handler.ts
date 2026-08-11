@@ -59,6 +59,10 @@ const magicalGirlGenerationConfig: GenerationConfig<AIGeneratedMagicalGirl, { re
   temperature: appConfig.MAGICAL_GIRL_GENERATION.temperature,
   promptBuilder: ({ realName, language }: { realName: string, language: string }) => 
     `请为名叫"${realName}"的人设计一个魔法少女角色。真实姓名：${realName}\n\n【重要指令】请你必须使用【${language}】进行内容创作。`,
+  promptRefBuilder: ({ realName, language }) => ({
+    id: 'character.magical-girl.generate',
+    variables: { realName, language },
+  }),
   schema: MagicalGirlGenerationSchema,
   taskName: "生成魔法少女",
 };
