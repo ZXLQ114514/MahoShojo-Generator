@@ -2,6 +2,7 @@
 import { generateWithAI, GenerationConfig, LoadBalanceStrategy, type GenerateWithAIOptions } from '@/lib/ai';
 import { buildChannelContextFromPayload } from '@/lib/ai/availability';
 import { z } from 'zod/v3';
+import { UserGenerationOverridesSchema } from '@/lib/ai/generation-settings/schemas';
 import { getRandomFlowers } from '@/lib/random-choose-hana-name';
 // import { saveToD1 } from '@/lib/d1';
 import { getLogger } from '@/lib/logger';
@@ -641,6 +642,7 @@ async function handler(req: Request): Promise<Response> {
     let customProviderOverride: AIProvider | null = null;
     let customProviderId: string | null = null;
     let customModelOverride: string | undefined;
+    let parsedCustomProvider: z.infer<typeof CustomProviderSchema> | null = null;
 
     if (customProviderPayload) {
       const parsedResult = CustomProviderSchema.safeParse(customProviderPayload);
@@ -653,6 +655,7 @@ async function handler(req: Request): Promise<Response> {
       }
 
       const parsed = parsedResult.data;
+      parsedCustomProvider = parsed;
       customProviderId = parsed.providerId;
       const providerConfig = AI_PROVIDER_CATALOG.find(item => item.id === parsed.providerId);
       if (!providerConfig) {
@@ -671,7 +674,7 @@ async function handler(req: Request): Promise<Response> {
 
       const sanitizedBaseUrl = providerConfig.baseUrl?.trim() ?? '';
       if (!sanitizedBaseUrl) {
-        customModelOverride = modelResolution.modelId;
+        customModelOverride = modelResolution.modelId === 'default' ? undefined : modelResolution.modelId;
         log.info('检测到 baseUrl 为空的自定义供应商，改用系统默认通道，仅覆盖模型参数', {
           providerId: providerConfig.id,
           model: modelResolution.modelId,
@@ -687,6 +690,8 @@ async function handler(req: Request): Promise<Response> {
           retryCount: 1,
           skipProbability: 0,
           ...(typeof parsed.maxOutputTokens === 'number' ? { defaultMaxOutputTokens: parsed.maxOutputTokens } : {}),
+          providerId: parsed.providerId,
+          ...(parsed.generationOverrides ? { generationOverrides: parsed.generationOverrides } : {}),
         };
       }
     }
@@ -747,6 +752,7 @@ async function handler(req: Request): Promise<Response> {
           {
             ...canshouGenerationConfig,
             ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
+            ...(parsedCustomProvider ? { generationSettingsContext: { providerId: parsedCustomProvider.providerId, ...(parsedCustomProvider.generationOverrides ? { userOverrides: parsedCustomProvider.generationOverrides } : {}) } } : {}),
           },
           aiOptions
         )
@@ -755,6 +761,7 @@ async function handler(req: Request): Promise<Response> {
           {
             ...magicalGirlDetailsConfig,
             ...(customModelOverride ? { modelOverride: customModelOverride } : {}),
+            ...(parsedCustomProvider ? { generationSettingsContext: { providerId: parsedCustomProvider.providerId, ...(parsedCustomProvider.generationOverrides ? { userOverrides: parsedCustomProvider.generationOverrides } : {}) } } : {}),
           },
           aiOptions
         );
@@ -841,5 +848,6 @@ const CustomProviderSchema = z.object({
   modelId: z.string().min(1),
   apiKey: z.string(),
   maxOutputTokens: z.number().int().min(1).max(1_000_000).optional(),
+  generationOverrides: UserGenerationOverridesSchema.optional(),
 });
 export default appRouteHandler;

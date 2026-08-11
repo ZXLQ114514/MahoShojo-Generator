@@ -14,6 +14,7 @@ describe('arena provider cooldown config', () => {
       currentMode: 'system',
       systemDurationMs: 120000,
       customDurationMs: 3000,
+      runtimeSettingKey: 'battle',
     });
   });
 
@@ -28,6 +29,7 @@ describe('arena provider cooldown config', () => {
       currentMode: 'custom',
       systemDurationMs: 120000,
       customDurationMs: 3000,
+      runtimeSettingKey: 'battle',
     });
   });
 
@@ -42,6 +44,7 @@ describe('arena provider cooldown config', () => {
       currentMode: 'system',
       systemDurationMs: 120000,
       customDurationMs: 3000,
+      runtimeSettingKey: 'battle',
     });
   });
 });

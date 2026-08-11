@@ -17,7 +17,7 @@ describe('creator result follow-up', () => {
     });
 
     expect(prompt).toContain('outfit');
-    expect(prompt).toContain('Xiabanmo');
+    expect(prompt).not.toContain('Xiabanmo');
     expect(prompt).toContain('魔法少女');
   });
 

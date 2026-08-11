@@ -113,6 +113,40 @@ describe('managed AI prompt catalog and renderer', () => {
     expect(output).toBe('A={{b}}; B=done');
     expect(() => renderPromptTemplate({ template: '{{a}}', slots: [{ name: 'a', required: true }], variables: {} })).toThrow(PromptTemplateError);
   });
+
+  test('card forge prompt keeps both untrusted inputs as required managed slots', () => {
+    const definition = getPromptDefinition('card-forge.game-card.generate')!;
+    expect(definition).toMatchObject({
+      category: 'card-forge',
+      active: true,
+      managementMode: 'overlay',
+    });
+    expect(definition.slots).toEqual([
+      expect.objectContaining({ name: 'sourceCardJson', required: true }),
+      expect.objectContaining({ name: 'customInstructions', required: true }),
+    ]);
+
+    const rendered = renderPromptTemplate({
+      template: definition.defaultBody,
+      slots: definition.slots,
+      variables: {
+        sourceCardJson: '{"name":"测试角色"}',
+        customInstructions: '突出控制能力',
+      },
+    });
+    expect(rendered).toContain('{"name":"测试角色"}');
+    expect(rendered).toContain('突出控制能力');
+
+    const withoutCustomInstructions = validatePromptTemplate({
+      template: definition.defaultBody.replace('{{customInstructions}}', ''),
+      slots: definition.slots,
+    });
+    expect(withoutCustomInstructions.ok).toBe(false);
+    if (!withoutCustomInstructions.ok) {
+      expect(withoutCustomInstructions.error.code).toBe('missing-required-slot');
+      expect(withoutCustomInstructions.error.slot).toBe('customInstructions');
+    }
+  });
 });
 
 describe('managed AI prompt D1 repository', () => {

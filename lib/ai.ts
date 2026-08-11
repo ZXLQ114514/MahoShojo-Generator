@@ -6,7 +6,8 @@ import { z } from 'zod/v3';
 import { config, AIProvider } from "./config";
 import { getLogger } from "./logger";
 import { getProviderFetch } from "@/lib/ai/middleware/provider-fetch";
-import { resolveMaxOutputTokensOption } from "@/lib/ai/max-output-tokens";
+import { resolveGenerationSettings } from "@/lib/ai/generation-settings/resolve";
+import type { GenerationSettingsContext, UserGenerationOverrides } from "@/lib/ai/generation-settings/types";
 import { enhanceErrorWithUpstreamMessage } from "@/lib/ai/utils/error-extraction";
 import { buildStructuredJsonInstructionFromZodSchema, parseStructuredJsonWithSchema } from "@/lib/ai/utils/structured-json";
 import { classifySuccess, classifyOutcome, recordAiChannelOutcome } from "@/lib/ai/availability";
@@ -28,7 +29,7 @@ const log = getLogger('ai');
 export interface GenerationConfig<T, I = string> {
   /** 固定提示词可以直接传文本，也可以引用管理员可编辑的目录项。 */
   systemPrompt: string | TextPromptRef;
-  temperature: number;
+  temperature?: number;
   promptBuilder: (input: I) => string | TextPromptRef;
   /** 可选的完整托管模板；存在时替代旧的 systemPrompt + promptBuilder。 */
   promptRefBuilder?: (input: I) => TextPromptRef;
@@ -38,6 +39,9 @@ export interface GenerationConfig<T, I = string> {
   taskName: string;
   maxOutputTokens?: number;
   modelOverride?: string; // 新增：可选的模型覆盖参数
+  generationOverrides?: UserGenerationOverrides;
+  /** 生成设置上下文：system/custom 通道统一传递 providerId 与用户覆盖。 */
+  generationSettingsContext?: GenerationSettingsContext;
 }
 
 const createAIClient = (provider: AIProvider) => {
@@ -278,6 +282,8 @@ export interface GenerateWithAIOptions {
     providerId: string;
     modelId: string;
   };
+  /** 生成设置上下文：system/custom 通道统一传递 providerId 与用户覆盖。 */
+  generationSettingsContext?: GenerationSettingsContext;
 }
 
 // 通用 AI 生成函数
@@ -309,7 +315,11 @@ export async function generateWithAI<T, I = string>(
     .join('\n\n');
   const baseProviders: AIProvider[] = [
     ...(options?.providerOverride ? [options.providerOverride] : []),
-    ...config.PROVIDERS,
+    ...config.PROVIDERS.map((provider) => ({
+      ...provider,
+      // config.PROVIDERS 属于系统通道；显式标记后才能命中 system::<model> 能力登记。
+      providerId: provider.providerId ?? 'system',
+    })),
   ];
 
   if (baseProviders.length === 0) {
@@ -457,7 +467,27 @@ export async function generateWithAI<T, I = string>(
             })(),
           },
         ]);
-        const maxOutputTokensOption = resolveMaxOutputTokensOption(generationConfig, provider);
+        const resolvedSettings = resolveGenerationSettings({
+          providerId: options?.generationSettingsContext?.providerId ?? generationConfig.generationSettingsContext?.providerId ?? provider.providerId ?? provider.type,
+          modelId: selectedModel,
+          taskDefaults: {
+            temperature: generationConfig.temperature,
+            maxOutputTokens: generationConfig.maxOutputTokens,
+          },
+          providerDefaults: provider,
+          userOverrides:
+            options?.generationSettingsContext?.userOverrides ??
+            generationConfig.generationSettingsContext?.userOverrides ??
+            provider.generationOverrides ??
+            generationConfig.generationOverrides,
+        });
+        if (resolvedSettings.diagnostics.omitted.length > 0 || resolvedSettings.diagnostics.warnings.length > 0) {
+          log.warn('生成参数解析诊断', {
+            provider: provider.name,
+            model: selectedModel,
+            ...resolvedSettings.diagnostics,
+          });
+        }
 
         const tryGenerateObject = async () => {
           return await generateObject({
@@ -465,9 +495,9 @@ export async function generateWithAI<T, I = string>(
             // 应对风控，尝试直接全部放入系统提示词中
             prompt: buildPromptMessages(systemPrompt),
             schema: generationConfig.schema,
-            temperature: generationConfig.temperature,
             maxRetries: 0,
-            ...maxOutputTokensOption,
+            ...resolvedSettings.standardOptions,
+            ...(resolvedSettings.providerOptions ? { providerOptions: resolvedSettings.providerOptions } : {}),
           });
         };
 
@@ -479,9 +509,9 @@ export async function generateWithAI<T, I = string>(
           const textResult = await generateText({
             model,
             prompt: buildPromptMessages(guidedPrompt),
-            temperature: generationConfig.temperature,
             maxRetries: 0,
-            ...maxOutputTokensOption,
+            ...resolvedSettings.standardOptions,
+            ...(resolvedSettings.providerOptions ? { providerOptions: resolvedSettings.providerOptions } : {}),
           });
 
           const parsed = parseStructuredJsonWithSchema(textResult.text, generationConfig.schema, {

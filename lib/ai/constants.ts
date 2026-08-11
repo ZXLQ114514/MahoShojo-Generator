@@ -47,6 +47,15 @@ const normalizeCustomModelId = (modelId: string): string | null => {
     return normalized;
 };
 
+const normalizeResolvedModelId = (provider: AIProviderOption, modelId: string): string => {
+    // DeepSeek 官方 V4 Flash 的 API modelId 是 deepseek-v4-flash。
+    // 目录暂时保留 -0731 以兼容既有 localStorage / UI 选择，在请求解析边界统一规范化。
+    if (provider.id === 'deepseek' && modelId.toLowerCase() === 'deepseek-v4-flash-0731') {
+        return 'deepseek-v4-flash';
+    }
+    return modelId;
+};
+
 export const resolveAIProviderModel = (
     provider: AIProviderOption,
     rawModelId: string
@@ -54,7 +63,7 @@ export const resolveAIProviderModel = (
     const modelId = rawModelId.trim();
     const preset = provider.models.find((model) => model.value === modelId);
     if (preset) {
-        return { modelId: preset.value, isCustom: false };
+        return { modelId: normalizeResolvedModelId(provider, preset.value), isCustom: false };
     }
 
     const customModelId = normalizeCustomModelId(rawModelId);
@@ -62,7 +71,7 @@ export const resolveAIProviderModel = (
         return null;
     }
 
-    return { modelId: customModelId, isCustom: true };
+    return { modelId: normalizeResolvedModelId(provider, customModelId), isCustom: true };
 };
 
 const XIAOMI_MIMO_MODELS: AIModelOption[] = [
@@ -75,24 +84,6 @@ const XIAOMI_MIMO_MODELS: AIModelOption[] = [
         value: 'mimo-v2.5',
         label: 'MiMo V2.5',
         description: '小米 MiMo V2.5 通用模型，适合日常对话、剧情推进与结构化文本生成。'
-    }
-];
-
-const SENSENOVA_TOKEN_PLAN_MODELS: AIModelOption[] = [
-    {
-        value: 'deepseek-v4-flash',
-        label: 'DeepSeek V4 Flash',
-        description: '商汤 Token Plan 相关的 DeepSeek V4 高速轻量模型，适合高频生成、草稿与长文本补全。'
-    },
-    {
-        value: 'sensenova-6.7-flash-lite',
-        label: 'SenseNova 6.7 Flash-Lite',
-        description: '商汤 SenseNova 6.7 免费额度相关轻量快模型，适合低成本剧情推进与结构化文本生成。'
-    },
-    {
-        value: 'sensenova-u1-fast',
-        label: 'SenseNova U1 Fast',
-        description: '商汤 SenseNova U1 快速模型，适合速度优先的对话、摘要与短中篇内容生成。'
     }
 ];
 
@@ -329,32 +320,32 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gemini-3.1-pro-preview',
                 label: 'Gemini 3.1 Pro',
-                description: 'Google 最新一代的 Gemini 3.1 Pro 预览模型。'
+                description: 'Google 的 Gemini 3.1 Pro 预览模型。'
             },
             {
                 value: 'gemini-3.5-flash-lite',
                 label: 'Gemini 3.5 Flash Lite',
-                description: 'Google 最新一代高速轻量模型，适合预算敏感与高并发生成场景。'
+                description: 'Google 高速轻量模型，适合预算敏感与高并发生成场景。'
             },
             {
                 value: 'gemini-2.5-pro',
                 label: 'Gemini 2.5 Pro',
-                description: 'Google 旗下前代的最先进模型系列，性能很棒棒。'
+                description: 'Google 前代旗舰模型系列，综合性能均衡，适合复杂创作与推理。'
             },
             {
                 value: 'gpt-5.5',
                 label: 'GPT-5.5',
-                description: 'OpenAI 最新旗舰模型，适合高质量内容生成与复杂任务。'
+                description: 'OpenAI 旗舰模型，适合高质量内容生成与复杂任务。'
             },
             {
                 value: 'gpt-5.4',
                 label: 'GPT-5.4',
-                description: 'OpenAI 最新通用模型，适合高质量内容生成与复杂任务。'
+                description: 'OpenAI 通用模型，适合高质量内容生成与复杂任务。'
             },
             {
                 value: 'gpt-5.4-mini',
                 label: 'GPT-5.4 Mini',
-                description: 'OpenAI 最新轻量模型，适合高频交互与快速生成。'
+                description: 'OpenAI 轻量模型，适合高频交互与快速生成。'
             },
             {
                 value: 'gpt-5.6-luna',
@@ -374,32 +365,27 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'claude-opus-4-8',
                 label: 'Claude Opus 4.8',
-                description: 'Anthropic 旗下最新旗舰模型，非常适合复杂的专业任务和高级代理。'
+                description: 'Anthropic 旗下旗舰模型，非常适合复杂的专业任务和高级代理。'
             },
             {
                 value: 'glm-5.2',
                 label: 'GLM-5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，Coding 能力开源 SOTA，适合复杂长程任务。'
+                description: '智谱开源旗舰模型，支持 1M 无损上下文，编程能力领先，适合复杂长程任务。'
             },
             {
                 value: 'glm-5.1',
                 label: 'GLM-5.1',
-                description: '智谱旗下新一代通用模型，综合能力更强，适合复杂指令、多轮对话与高质量创作。'
+                description: '智谱通用模型，综合能力均衡，适合复杂指令、多轮对话与高质量创作。'
             },
             {
                 value: 'glm-5',
                 label: 'GLM-5',
-                description: '智谱旗下新一代通用模型，综合能力更强，适合复杂指令、多轮对话与高质量创作。'
+                description: '智谱通用模型，综合能力均衡，适合复杂指令、多轮对话与高质量创作。'
             },
             {
-                value: 'glm-4.7',
-                label: 'GLM-4.7',
-                description: '智谱旗下通用模型的更新版本，适合复杂指令、多轮对话与综合写作场景。'
-            },
-            {
-                value: 'deepseek-v4-flash',
+                value: 'deepseek-v4-flash-0731',
                 label: 'DeepSeek V4 Flash',
-                description: 'DeepSeek V4 的高速轻量版本，适合 KouriChat 上的高频生成与流式草稿。'
+                description: '正式版（0731）的 DeepSeek V4 的高速轻量版本，适合 KouriChat 上的高频生成与流式草稿。'
             },
             {
                 value: 'deepseek-v4-pro',
@@ -429,7 +415,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'kimi-k2.6',
                 label: 'Kimi K2.6',
-                description: 'Moonshot 旗下的最新大模型，适合中文创作、角色设定、摘要与多轮指令跟随。'
+                description: 'Moonshot 通用模型，适合中文创作、角色设定、摘要与多轮指令跟随。'
             },
         ]
     },
@@ -445,12 +431,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gpt-5.5',
                 label: 'GPT 5.5（高级）',
-                description: '高级模型（Pro/Pro+）。OpenAI 最新旗舰模型，适合高质量生成与复杂任务。'
+                description: '高级模型（Pro/Pro+）。OpenAI 旗舰模型，适合高质量生成与复杂任务。'
             },
             {
                 value: 'gpt-5.4',
                 label: 'GPT 5.4（高级）',
-                description: '高级模型（Pro/Pro+）。OpenAI 最新通用模型，适合高质量生成与复杂任务。'
+                description: '高级模型（Pro/Pro+）。OpenAI 通用模型，适合高质量生成与复杂任务。'
             },
             {
                 value: 'gpt-5.4-mini',
@@ -460,7 +446,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'claude-opus-4.8',
                 label: 'Claude Opus 4.8（高级）',
-                description: '高级模型（Pro/Pro+）。Anthropic 旗下最新旗舰模型，非常适合复杂的专业任务。'
+                description: '高级模型（Pro/Pro+）。Anthropic 旗下旗舰模型，非常适合复杂的专业任务。'
             },
             {
                 value: 'claude-sonnet-4.6',
@@ -495,17 +481,17 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'deepseek-v4-flash',
                 label: 'DeepSeek V4 Flash（标准）',
-                description: '标准模型（所有付费方案）。DeepSeek 最新高速轻量模型。'
+                description: '标准模型（所有付费方案）。DeepSeek 高速轻量模型。'
             },
             {
                 value: 'deepseek-v4-pro',
                 label: 'DeepSeek V4 Pro（标准）',
-                description: '标准模型（所有付费方案）。DeepSeek 最新高性能模型。'
+                description: '标准模型（所有付费方案）。DeepSeek 高性能模型。'
             },
             {
                 value: 'deepseek-v3.2',
                 label: 'DeepSeek V3.2（标准）',
-                description: '标准模型（所有付费方案）。作为 DeepSeek 新版本可选项。'
+                description: '标准模型（所有付费方案）。DeepSeek 通用对话与推理可选项。'
             },
             {
                 value: 'kimi-k2.6',
@@ -526,27 +512,27 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'minimax-m3',
                 label: 'MiniMax M3',
-                description: 'MiniMax 最新旗舰模型，支持交错思维链与工具调用，适合复杂 Agent 工作流与长程任务。'
+                description: 'MiniMax 多模态旗舰模型，支持文本、图像与视频输入，100 万 Token 上下文，适合长程 Agent 工作与工具调用。'
             },
             {
                 value: 'minimax-m2.7',
                 label: 'MiniMax M2.7',
-                description: 'MiniMax 面向自主执行与真实工作流的新一代模型，适合复杂规划、长链路任务与高质量文本生成。'
+                description: 'MiniMax 面向自主执行与真实工作流的模型，支持多智能体协同与复杂任务规划执行，适合长链路任务。'
             },
             {
                 value: 'minimax-m2.5',
                 label: 'MiniMax M2.5',
-                description: 'MiniMax 面向真实工作场景的模型，适合办公文档、结构化输出与多步骤创作任务。'
+                description: 'MiniMax 面向真实工作场景的模型，擅长办公文档生成与操作、智能体协同，适合多步骤创作任务。'
             },
             {
                 value: 'glm-5.2',
                 label: 'GLM-5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，Coding 能力开源 SOTA，适合复杂长程任务。'
+                description: '智谱开源旗舰模型，支持 1M 无损上下文，编程能力领先，适合复杂长程任务。'
             },
             {
                 value: 'glm-5.1',
                 label: 'GLM-5.1',
-                description: '智谱新一代长链路模型，代码与复杂任务执行能力更强，适合高约束内容生成。'
+                description: '智谱长链路模型，代码与复杂任务执行能力强，适合高约束内容生成。'
             },
             {
                 value: 'glm-5',
@@ -556,37 +542,62 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'glm-4.7',
                 label: 'GLM-4.7',
-                description: '智谱通用模型更新版本，强化编程与多步推理，适合稳定的中文写作和结构化任务。'
+                description: '智谱通用模型，强化编程与多步推理，适合稳定中文写作与结构化任务。'
             },
             {
-                value: 'deepseek-v4-flash',
+                value: 'glm-4.5-air',
+                label: 'GLM-4.5 Air',
+                description: '智谱轻量级旗舰家族成员，支持思考与非思考双模式，可自由切换推理深度。'
+            },
+            {
+                value: 'deepseek-v4-flash-0731',
                 label: 'DeepSeek V4 Flash',
-                description: 'DeepSeek V4 的高速轻量版本，拥有长上下文能力，适合兼顾质量与成本的生成场景。'
+                description: 'DeepSeek V4 Flash 正式版，Agent 能力大幅增强，百万级上下文，兼顾质量与成本。'
             },
             {
                 value: 'deepseek-v4-pro',
                 label: 'DeepSeek V4 Pro',
-                description: 'DeepSeek V4 完全体，适合复杂分析、长文本写作、Agent 任务与更高要求的生成。'
+                description: 'DeepSeek V4 完全体，百万字超长上下文，Agent、世界知识与推理性能领先，适合复杂分析、长文本写作。'
             },
             {
                 value: 'deepseek-v3.2',
                 label: 'DeepSeek V3.2',
-                description: 'DeepSeek 通用对话与推理模型，适合剧情推进、总结、分析与多轮交互。'
+                description: 'DeepSeek 通用对话与推理模型，融合稀疏注意力与强化学习，适合分析、总结与多轮交互。'
             },
             {
                 value: 'kimi-k3',
                 label: 'Kimi K3',
-                description: 'Moonshot 旗舰模型，1M token 上下文，综合智能领先，适合长程编程与端到端知识工作。'
+                description: 'Moonshot 旗舰模型，2.8 万亿参数，原生视觉理解，100 万 Token 上下文，适合软件工程、知识工作与深度推理。'
+            },
+            {
+                value: 'kimi-k2.7-code',
+                label: 'Kimi K2.7 Code',
+                description: 'Moonshot 面向编程场景的模型，长上下文指令遵循更可靠，支持文本、图片与视频输入。'
             },
             {
                 value: 'kimi-k2.6',
                 label: 'Kimi K2.6',
-                description: 'Moonshot 新一代多模态模型，适合长链路编程、复杂创作和多智能体式任务。'
+                description: 'Moonshot 多模态模型，面向长链路编程、代码驱动的 UI/UX 生成与多智能体编排。'
             },
             {
                 value: 'kimi-k2.5',
                 label: 'Kimi K2.5',
-                description: 'Moonshot Kimi 系列模型，适合中文创作、摘要、视觉编程与多轮指令跟随。'
+                description: 'Moonshot 原生多模态模型，视觉编程与智能体范式领先，适合中文创作、摘要与多轮指令跟随。'
+            },
+            {
+                value: 'seed-2.1-pro',
+                label: 'Seed 2.1 Pro',
+                description: '字节 Seed 面向生产级智能的模型，升级 Coding、Agent 与多模态能力，具备自主规划与长链路执行。'
+            },
+            {
+                value: 'seed-2.1-turbo',
+                label: 'Seed 2.1 Turbo',
+                description: '字节 Seed 效果与成本均衡的模型，全面升级 Coding、Agent 与多模态能力，适合企业复杂任务。'
+            },
+            {
+                value: 'seed-evolving',
+                label: 'Seed-Evolving',
+                description: '字节 Seed 面向 Coding 与 Agent 的持续升级模型，以统一模型 ID 提供能力，适合复杂任务落地。'
             },
             {
                 value: 'seed-2.0-pro',
@@ -604,34 +615,34 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
                 description: '字节 Seed 低时延轻量模型，适合成本敏感、高并发和草稿生成场景。'
             },
             {
+                value: 'qwen3.8-max',
+                label: 'Qwen 3.8 Max',
+                description: '通义千问 3.8 旗舰模型，2.4 万亿参数 MoE，编程与办公能力全面跃升，原生视觉理解，适合长周期自主任务。'
+            },
+            {
                 value: 'qwen3.7-max',
                 label: 'Qwen 3.7 Max',
-                description: '通义千问 3.7 Max，最新旗舰模型，适合复杂中文创作、长文本与高约束任务。'
+                description: '通义千问 3.7 旗舰模型，面向智能体工作负载，编码与长周期自主任务能力强，支持提示缓存。'
             },
             {
                 value: 'qwen3.7-plus',
                 label: 'Qwen 3.7 Plus',
-                description: '通义千问 3.7 Plus，百万上下文模型，适合长文本、多模态与复杂中文任务。'
-            },
-            {
-                value: 'qwen3.7-flash',
-                label: 'Qwen 3.7 Flash',
-                description: '通义千问 3.7 Flash，响应速度快，适合高频交互、推理速度优先与批量生成。'
+                description: '通义千问 3.7 Plus，百万上下文，全面升级视觉-语言能力，支持多模态交互与智能体工作流。'
             },
             {
                 value: 'qwen3.6-plus',
                 label: 'Qwen 3.6 Plus',
-                description: '通义千问 3.6 Plus，百万上下文模型，适合长文本、多模态与复杂中文任务。'
+                description: '通义千问 3.6 Plus，混合架构结合线性注意力与 MoE，智能体编码与推理能力突出。'
             },
             {
                 value: 'qwen3.5-plus',
                 label: 'Qwen 3.5 Plus',
-                description: '通义千问 3.5 Plus，百万上下文模型，适合长文本、多模态与复杂中文任务。'
+                description: '通义千问 3.5 Plus，原生视觉语言模型，混合架构推理效率高，性能媲美一线前沿模型。'
             },
             {
                 value: 'qwen3.5-flash',
                 label: 'Qwen 3.5 Flash',
-                description: '通义千问 3.5 Flash，响应速度快，适合高频交互、推理速度优先与批量生成。'
+                description: '通义千问 3.5 Flash，原生视觉语言模型，响应速度快，兼具推理速度与性能。'
             },
             {
                 value: 'qwen3-max',
@@ -641,17 +652,52 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'qwen3-vl-plus',
                 label: 'Qwen3 VL Plus',
-                description: '通义千问视觉理解模型，适合多模态输入、视觉智能体和长视频理解场景。'
+                description: '通义千问视觉理解模型，思考与非思考模式融合，适合多模态输入、视觉智能体和长视频理解。'
+            },
+            {
+                value: 'qwen3.5-35b-a3b',
+                label: 'Qwen 3.5 35B A3B',
+                description: '通义千问 3.5 轻量模型，35B 总参数、3B 激活，混合架构推理高效，综合表现接近 Qwen3.5-27B。'
+            },
+            {
+                value: 'qwen3.6-max-preview',
+                label: 'Qwen 3.6 Max Preview',
+                description: '通义千问 3.6 Max 预览版，约万亿参数 MoE，针对智能体编码、工具调用与长上下文推理优化，原生支持 262K 上下文。'
             },
             {
                 value: 'step-3.7-flash',
                 label: 'Step 3.7 Flash',
-                description: '阶跃星辰最新高效多模态模型，侧重推理速度与效率，适合长上下文下的快速生成。'
+                description: '阶跃星辰高效多模态模型，196B 参数语言主干加视觉编码器，支持 256K 上下文与多档推理强度。'
             },
             {
                 value: 'step-3.5-flash',
                 label: 'Step 3.5 Flash',
-                description: '阶跃星辰开源基础模型，侧重推理速度与效率，适合长上下文下的快速生成。'
+                description: '阶跃星辰开源基础模型，MoE 架构，侧重推理速度与效率，超长上下文下保持高速。'
+            },
+            {
+                value: 'hy3',
+                label: '混元 Hy3',
+                description: '腾讯混元通用模型，295B/21B 激活 MoE，256K 上下文，提供多档思考模式，适合复杂任务执行。'
+            },
+            {
+                value: 'longcat-2.0',
+                label: 'LongCat 2.0',
+                description: '美团龙猫 Agent 原生模型，代码能力强，深度适配主流编程工具，支持 1M 上下文。'
+            },
+            {
+                value: 'ling-3.0-flash',
+                label: 'Ling 3.0 Flash',
+                description: 'Ling 系列高性价比模型，124B 总参数、5.1B 激活，256K 上下文，长程任务稳定性强，工具调用精度高。'
+            },
+            {
+                value: 'mimo-v2.5-pro',
+                label: 'MiMo V2.5 Pro',
+                description: '小米旗舰大模型，通用智能体能力、复杂软件工程与长周期任务表现强劲，支持约百万上下文。'
+            },
+            {
+                value: 'mimo-v2.5',
+                label: 'MiMo V2.5',
+                description: '小米原生全模态大模型，智能体场景旗舰水准，约一半推理成本，支持百万上下文。'
             },
         ]
     },
@@ -664,16 +710,6 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
         type: 'openai',
         mode: 'auto',
         models: XIAOMI_MIMO_MODELS,
-    },
-    {
-        id: 'sensenova-token-plan',
-        name: '商汤 SenseNova Token Plan',
-        description: '商汤大装置 Token Plan OpenAI 兼容端点。优先收录免费赠送额度和 Token Plan 相关文本模型，需使用商汤控制台签发的 Token Plan Key。',
-        docsUrl: 'https://www.sensenova.cn/token-plan',
-        baseUrl: 'https://api.sensenova.cn/v1',
-        type: 'openai',
-        mode: 'auto',
-        models: SENSENOVA_TOKEN_PLAN_MODELS,
     },
     {
         id: 'agnes-ai',
@@ -711,7 +747,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
         mode: 'auto',
         models: [
             {
-                value: 'deepseek/deepseek-v4-flash',
+                value: 'deepseek/deepseek-v4-flash-20260731',
                 label: 'DeepSeek V4 Flash',
                 description: 'DeepSeek V4 高速轻量模型，适合高频生成、剧情推进与草稿输出。'
             },
@@ -738,12 +774,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'z-ai/glm-5.2',
                 label: 'GLM-5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，Coding 能力开源 SOTA，适合复杂长程任务。'
+                description: '智谱开源旗舰模型，支持 1M 无损上下文，编程能力领先，适合复杂长程任务。'
             },
             {
                 value: 'z-ai/glm-5.1',
                 label: 'GLM-5.1',
-                description: '智谱 GLM 新一代通用模型，适合复杂指令、多轮对话与结构化中文生成。'
+                description: '智谱 GLM 通用模型，适合复杂指令、多轮对话与结构化中文生成。'
             },
             {
                 value: 'z-ai/glm-5',
@@ -758,7 +794,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'qwen/qwen3.6-plus',
                 label: 'Qwen 3.6 Plus',
-                description: '通义千问新一代 Plus 模型，适合复杂中文任务、长文本与多轮指令。'
+                description: '通义千问 Plus 模型，适合复杂中文任务、长文本与多轮指令。'
             },
             {
                 value: 'qwen/qwen3.5-35b-a3b',
@@ -773,12 +809,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'MiniMax/MiniMax-M3',
                 label: 'MiniMax M3',
-                description: 'MiniMax 最新旗舰模型，支持交错思维链与工具调用，适合复杂 Agent 工作流与长程任务。'
+                description: 'MiniMax 多模态旗舰模型，支持交错思维链与工具调用，适合复杂 Agent 工作流与长程任务。'
             },
             {
                 value: 'minimax/minimax-m2.7',
                 label: 'MiniMax M2.7',
-                description: 'MiniMax 新一代模型，适合复杂规划、长链路任务与高质量文本生成。'
+                description: 'MiniMax 通用模型，适合复杂规划、长链路任务与高质量文本生成。'
             },
             {
                 value: 'doubao-seed-1.6-thinking',
@@ -814,12 +850,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gemini-3.1-pro-preview',
                 label: 'Gemini 3.1 Pro',
-                description: 'Google 最新一代的 Gemini 3.1 Pro 预览模型。'
+                description: 'Google 的 Gemini 3.1 Pro 预览模型。'
             },
             {
                 value: 'gemini-3.5-flash-lite',
                 label: 'Gemini 3.5 Flash Lite',
-                description: 'Google 最新一代高速轻量模型，适合预算敏感与高并发生成场景。'
+                description: 'Google 高速轻量模型，适合预算敏感与高并发生成场景。'
             },
             {
                 value: 'gemini-2.5-pro',
@@ -829,17 +865,17 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gemini-2.5-flash',
                 label: 'Gemini 2.5 Flash',
-                description: 'Google 旗下前代的最先进模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。'
+                description: 'Google 前代旗舰模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。'
             },
             {
                 value: 'gemini-2.5-flash-lite-preview-09-2025',
                 label: 'Gemini 2.5 Flash Lite',
-                description: 'Google 旗下前代的最先进模型系列，性能略差但是速度很快，是魔法少女生成器默认使用的轻量模型。'
+                description: 'Google 前代旗舰模型系列，性能略逊但速度很快，是魔法少女生成器默认使用的轻量模型。'
             },
             {
                 value: 'gpt-5.5',
                 label: 'GPT-5.5',
-                description: 'OpenAI 最新旗舰模型，适合高质量内容生成与复杂任务。'
+                description: 'OpenAI 旗舰模型，适合高质量内容生成与复杂任务。'
             },
             {
                 value: 'gpt-5.6-luna',
@@ -859,7 +895,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'claude-opus-4.8',
                 label: 'Claude Opus 4.8',
-                description: 'Anthropic 旗下最新旗舰模型，非常适合复杂的专业任务和高级代理。'
+                description: 'Anthropic 旗下旗舰模型，非常适合复杂的专业任务和高级代理。'
             },
             {
                 value: 'claude-sonnet-4.6',
@@ -869,22 +905,22 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'grok-4.5',
                 label: 'Grok 4.5',
-                description: 'xAI 旗下最新通用模型，适合头脑风暴、创意发散与快速问答。'
+                description: 'xAI 通用模型，适合头脑风暴、创意发散与快速问答。'
             },
             {
                 value: 'glm-5.2',
                 label: 'GLM-5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，Coding 能力开源 SOTA，适合复杂长程任务。'
+                description: '智谱开源旗舰模型，支持 1M 无损上下文，编程能力领先，适合复杂长程任务。'
             },
             {
                 value: 'glm-5.1',
                 label: 'GLM-5.1',
-                description: '智谱旗下新一代通用模型，综合能力更强，适合复杂指令、多轮对话与高质量创作。'
+                description: '智谱通用模型，综合能力均衡，适合复杂指令、多轮对话与高质量创作。'
             },
             {
                 value: 'glm-5',
                 label: 'GLM-5',
-                description: '智谱新一代通用模型，适合中文对话、总结与结构化输出。'
+                description: '智谱通用模型，适合中文对话、总结与结构化输出。'
             },
             {
                 value: 'qwen3.6-plus',
@@ -902,7 +938,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
                 description: 'DeepSeek V4 完全体，适合复杂分析、长文本写作与高质量生成。'
             },
             {
-                value: 'deepseek-v4-flash',
+                value: 'deepseek-v4-flash-0731',
                 label: 'DeepSeek V4 Flash',
                 description: 'DeepSeek V4 高速轻量模型，适合高频生成、剧情推进与草稿输出。'
             },
@@ -999,10 +1035,10 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
         mode: 'json',
         models: [
             {
-                value: 'deepseek-ai/DeepSeek-V4-Flash',
+                value: 'deepseek-ai/DeepSeek-V4-Flash-0731',
                 label: 'DeepSeek V4 Flash',
                 description:
-                    'DeepSeek V4 的高速轻量版本，但是体验也很强大，据称文本生成体验堪比 gemini-3.1-pro。'
+                    'DeepSeek V4 Flash 正式版，Agent 能力大幅增强，百万级上下文，兼顾质量与成本。'
             },
             {
                 value: 'deepseek-ai/DeepSeek-V4-Pro',
@@ -1042,17 +1078,17 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'ZhipuAI/GLM-5.2',
                 label: 'GLM-5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，Coding 能力开源 SOTA，适合复杂长程任务。'
+                description: '智谱开源旗舰模型，支持 1M 无损上下文，编程能力领先，适合复杂长程任务。'
             },
             {
                 value: 'ZhipuAI/GLM-5',
                 label: 'GLM-5',
-                description: '面向中文场景的新一代通用模型，适合复杂对话、改写与信息整理。'
+                description: '面向中文场景的通用模型，适合复杂对话、改写与信息整理。'
             },
             {
                 value: 'ZhipuAI/GLM-5.1',
                 label: 'GLM-5.1',
-                description: '智谱旗下新一代通用模型，综合能力更强，适合复杂指令、多轮对话与高质量创作。'
+                description: '智谱通用模型，综合能力均衡，适合复杂指令、多轮对话与高质量创作。'
             },
             {
                 value: 'ZhipuAI/GLM-4.7-Flash',
@@ -1077,12 +1113,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'MiniMax/MiniMax-M3',
                 label: 'MiniMax-M3',
-                description: 'MiniMax 最新旗舰模型，支持交错思维链与工具调用，适合复杂 Agent 工作流与长程任务。'
+                description: 'MiniMax 多模态旗舰模型，支持交错思维链与工具调用，适合复杂 Agent 工作流与长程任务。'
             },
             {
                 value: 'MiniMax/MiniMax-M2.7',
                 label: 'MiniMax-M2.7',
-                description: '稀宇科技 MiniMax 旗下最新开源模型，专为编码与智能体任务进行优化。'
+                description: '稀宇科技 MiniMax 旗下开源模型，专为编码与智能体任务进行优化。'
             },
             {
                 value: 'MiniMax/MiniMax-M2.5',
@@ -1093,6 +1129,26 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
                 value: 'moonshotai/Kimi-K2.5',
                 label: 'Kimi K2.5',
                 description: 'Moonshot 当前在魔搭可用的 Kimi 系列模型，适合中文创作、摘要与多轮指令跟随。'
+            },
+            {
+                value: 'stepfun-ai/Step-3.7-Flash',
+                label: 'Step 3.7 Flash',
+                description: '阶跃星辰高效多模态模型，196B 参数语言主干加视觉编码器，支持 256K 上下文与多档推理强度。'
+            },
+            {
+                value: 'stepfun-ai/Step-3.5-Flash',
+                label: 'Step 3.5 Flash',
+                description: '阶跃星辰开源基础模型，MoE 架构，侧重推理速度与效率，超长上下文下保持高速。'
+            },
+            {
+                value: 'Tencent-Hunyuan/Hy3',
+                label: '混元 Hy3',
+                description: '腾讯混元通用模型，295B/21B 激活 MoE，256K 上下文，提供多档思考模式，适合复杂任务执行。'
+            },
+            {
+                value: 'meituan-longcat/LongCat-Flash-Lite',
+                label: 'LongCat Flash Lite',
+                description: '美团龙猫轻量模型，适合日常创作、中文写作与结构化输出。'
             },
         ]
     },
@@ -1112,12 +1168,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gemini-3.1-pro-preview',
                 label: 'Gemini 3.1 Pro',
-                description: 'Google 最新一代的 Gemini 3.1 Pro 预览模型。'
+                description: 'Google 的 Gemini 3.1 Pro 预览模型。'
             },
             {
                 value: 'gemini-3.5-flash-lite',
                 label: 'Gemini 3.5 Flash Lite',
-                description: 'Google 最新一代高速轻量模型，适合预算敏感与高并发生成场景。'
+                description: 'Google 高速轻量模型，适合预算敏感与高并发生成场景。'
             },
             {
                 value: 'gemini-2.5-pro',
@@ -1127,22 +1183,22 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gemini-2.5-flash',
                 label: 'Gemini 2.5 Flash',
-                description: 'Google 旗下前代的最先进模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。'
+                description: 'Google 前代旗舰模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。'
             },
             {
                 value: 'gemini-2.5-flash-lite',
                 label: 'Gemini 2.5 Flash Lite',
-                description: 'Google 旗下前代的最先进模型系列，性能略差但是速度很快，是魔法少女生成器默认使用的轻量模型。'
+                description: 'Google 前代旗舰模型系列，性能略逊但速度很快，是魔法少女生成器默认使用的轻量模型。'
             },
             {
                 value: 'gemma-4-31b-it',
                 label: 'Gemma 4 31B IT',
-                description: '较新的 Gemma 4 指令模型（31B），适合作为高优先级的 Gemma 备用选择。'
+                description: 'Gemma 4 指令模型（31B），适合作为高优先级的 Gemma 备用选择。'
             },
             {
                 value: 'gemma-4-26b-a4b-it',
                 label: 'Gemma 4 26B A4B IT',
-                description: '较新的 Gemma 4 指令模型（26B A4B），建议先作为可选备用通道使用。'
+                description: 'Gemma 4 指令模型（26B A4B），建议先作为可选备用通道使用。'
             },
             {
                 value: 'gemma-3-27b-it',
@@ -1170,8 +1226,11 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
         type: 'deepseek',
         mode: 'auto',
         models: [
-            { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', description: 'DeepSeek 当前默认通道中的 V4 高速轻量模型，适合高频生成与长文本补全。' },
-            { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'DeepSeek 当前默认通道中的 DeepSeek V4 高性能模型。' },
+            { value: 'deepseek-v4-flash-0731', label: 'DeepSeek V4 Flash', description: 'DeepSeek V4 Flash 正式版，Agent 能力大幅增强，百万级上下文，兼顾质量与成本。' },
+            { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'DeepSeek V4 的完全体，适合复杂分析、长文本写作与更高要求的生成任务。' },
+            { value: 'deepseek-chat', label: 'DeepSeek-V3.2', description: '通用对话与分析模型，适合日常问答、写作与总结。' },
+            { value: 'deepseek-reasoner', label: 'DeepSeek-V3.2 思考模式', description: '思考模式会拉长推理链路，适合复杂问题与多步分析。' },
+            { value: 'deepseek-r1', label: 'DeepSeek R1', description: 'DeepSeek 思考版本，适合需要多步推理的复杂任务。' },
         ]
     },
     {
@@ -1196,17 +1255,17 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'Pro/zai-org/GLM-5.2',
                 label: 'GLM-5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，Coding 能力开源 SOTA，适合复杂长程任务。'
+                description: '智谱开源旗舰模型，支持 1M 无损上下文，编程能力领先，适合复杂长程任务。'
             },
             {
                 value: 'Pro/zai-org/GLM-5.1',
                 label: 'GLM-5.1',
-                description: '智谱旗下新一代通用模型，综合能力更强，适合复杂指令、多轮对话与高质量创作。'
+                description: '智谱通用模型，综合能力均衡，适合复杂指令、多轮对话与高质量创作。'
             },
             {
                 value: 'Qwen/Qwen3.7-max',
                 label: 'Qwen 3.7 Max',
-                description: '通义千问 3.7 Max，最新旗舰模型，适合复杂中文创作、长文本与高约束任务。'
+                description: '通义千问 3.7 旗舰模型，适合复杂中文创作、长文本与高约束任务。'
             },
             {
                 value: 'Qwen/Qwen3.7-plus',
@@ -1250,29 +1309,33 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
         mode: 'auto',
         models: [
             {
-                value: 'gemini-3.6-flash',
+                value: 'google/gemini-3.6-flash',
                 label: 'Gemini 3.6 Flash',
                 description: 'Google 的新模型，据用户评测说很喜欢一惊一乍，还挺中二的。'
             },
-            { value: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', description: 'Google 最新一代的 Gemini 3.1 Pro 预览模型。' },
-            { value: 'google/gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', description: 'Google 最新一代高速轻量模型，适合预算敏感与高并发生成场景。' },
-            { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Google 旗下前代的最先进模型系列，性能很棒棒。' },
-            { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Google 旗下前代的最先进模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。' },
-            { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', description: 'Google 旗下前代的最先进模型系列，性能略差但是速度很快，是魔法少女生成器默认使用的轻量模型。' },
-            { value: 'openai/gpt-5.5', label: 'GPT-5.5', description: 'OpenAI 最新旗舰模型，适合高质量内容生成与复杂任务。' },
-            { value: 'openai/gpt-5.4', label: 'GPT-5.4', description: 'OpenAI 最新通用模型，适合高质量内容生成与复杂任务。' },
+            { value: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', description: 'Google 的 Gemini 3.1 Pro 预览模型。' },
+            { value: 'google/gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', description: 'Google 高速轻量模型，适合预算敏感与高并发生成场景。' },
+            { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Google 前代旗舰模型系列，综合性能均衡，适合复杂创作与推理。' },
+            { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Google 前代旗舰模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。' },
+            { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', description: 'Google 前代旗舰模型系列，性能略逊但速度很快，是魔法少女生成器默认使用的轻量模型。' },
+            { value: 'openai/gpt-5.5', label: 'GPT-5.5', description: 'OpenAI 旗舰模型，适合高质量内容生成与复杂任务。' },
+            { value: 'openai/gpt-5.4', label: 'GPT-5.4', description: 'OpenAI 通用模型，适合高质量内容生成与复杂任务。' },
             { value: 'openai/gpt-5.6-luna', label: 'GPT-5.6 Luna', description: 'GPT-5.6 系列高性价比模型，主打极致速度与成本效益，适合高频调用、低延迟的高吞吐量任务。' },
             { value: 'openai/gpt-5.6-terra', label: 'GPT-5.6 Terra', description: 'GPT-5.6 系列均衡主力模型，性能对标 GPT-5.5 但成本仅为其一半，适合日常生产工作负载与通用任务。' },
             { value: 'openai/gpt-5.6-sol', label: 'GPT-5.6 Sol', description: 'GPT-5.6 系列旗舰模型，专为复杂编程、科研与多步推理等高端任务设计，支持深度推理与多智能体协作。' },
-            { value: 'anthropic/claude-opus-4.8', label: 'Claude Opus 4.8', description: 'Anthropic 旗下最新旗舰模型，非常适合复杂的专业任务和高级代理。' },
+            { value: 'anthropic/claude-opus-4.8', label: 'Claude Opus 4.8', description: 'Anthropic 旗下旗舰模型，非常适合复杂的专业任务和高级代理。' },
             { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6', description: 'Anthropic 旗下主力模型之一，写作、推理与长文本表现稳定。' },
-            { value: 'x-ai/grok-4.5', label: 'Grok 4.5', description: 'xAI 旗下最新通用模型，适合头脑风暴、创意发散与快速问答。' },
-            { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash', description: 'DeepSeek V4 的高速轻量版本，但是体验也很强大，据称文本生成体验堪比 gemini-3.1-pro。' },
+            { value: 'x-ai/grok-4.5', label: 'Grok 4.5', description: 'xAI 通用模型，适合头脑风暴、创意发散与快速问答。' },
+            { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash Preview', description: 'DeepSeek V4 Flash 预览版，百万级上下文，兼顾质量与成本。' },
+            { value: 'deepseek/deepseek-v4-flash-0731', label: 'DeepSeek V4 Flash', description: 'DeepSeek V4 Flash 正式版，Agent 能力大幅增强，百万级上下文，兼顾质量与成本。' },
             { value: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'DeepSeek V4 的高性能版本，适合需要高精度和复杂推理的任务。' },
-            { value: 'qwen/qwen3.6-plus', label: 'Qwen 3.6 Plus', description: '通义千问 3.6 Plus，先进多模态开源旗舰模型，采用混合架构，能力强大。' },
-            { value: 'qwen/qwen3.5-plus', label: 'Qwen 3.5 Plus', description: '通义千问 3.5 Plus，先进多模态开源旗舰模型，采用混合架构，能力强大。' },
-            { value: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6', description: 'Moonshot AI 旗下最新模型，在多模态和智能体能力方面实现了显著飞跃。' },
-            { value: 'moonshotai/kimi-k3', label: 'Kimi K3', description: 'Moonshot 旗舰模型，1M token 上下文，综合智能领先，适合长程编程与端到端知识工作。' },
+            { value: 'qwen/qwen3.8-max', label: 'Qwen 3.8 Max', description: '通义千问 3.8 旗舰模型，2.4 万亿参数 MoE，编程与办公能力全面跃升，原生视觉理解，适合长周期自主任务。' },
+            { value: 'qwen/qwen3.7-max', label: 'Qwen 3.7 Max', description: '通义千问 3.7 旗舰模型，面向智能体工作负载，编码与长周期自主任务能力强，支持提示缓存。' },
+            { value: 'qwen/qwen3.6-plus', label: 'Qwen 3.6 Plus', description: '通义千问 3.6 Plus，混合架构结合线性注意力与 MoE，智能体编码与推理能力突出。' },
+            { value: 'moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', description: 'Moonshot 面向编程场景的模型，长上下文指令遵循更可靠，支持文本、图片与视频输入。' },
+            { value: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6', description: 'Moonshot AI 多模态模型，在多模态和智能体能力方面表现出色。' },
+            { value: 'moonshotai/kimi-k3', label: 'Kimi K3', description: 'Moonshot 旗舰模型，2.8 万亿参数，原生视觉理解，100 万 Token 上下文，适合软件工程、知识工作与深度推理。' },
+            { value: 'minimax/minimax-m3', label: 'MiniMax M3', description: 'MiniMax 多模态旗舰模型，支持文本、图像与视频输入，100 万 Token 上下文，适合长程 Agent 工作与工具调用。' },
         ]
     },
     {
@@ -1292,12 +1355,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gemini-2.5-flash',
                 label: 'Gemini 2.5 Flash',
-                description: 'Google 旗下前代的最先进模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。'
+                description: 'Google 前代旗舰模型系列，在性能和价格上十分均衡，也是魔法少女生成器默认使用的模型。'
             },
             {
                 value: 'gemini-2.5-flash-lite',
                 label: 'Gemini 2.5 Flash Lite',
-                description: 'Google 旗下前代的最先进模型系列，性能略差但是速度很快，是魔法少女生成器默认使用的轻量模型。'
+                description: 'Google 前代旗舰模型系列，性能略逊但速度很快，是魔法少女生成器默认使用的轻量模型。'
             },
             {
                 value: 'gemini-3.1-pro',
@@ -1317,7 +1380,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'gemini-3.5-flash-lite',
                 label: 'Gemini 3.5 Flash Lite',
-                description: 'Google 最新一代高速轻量模型，适合预算敏感与高并发生成场景。'
+                description: 'Google 高速轻量模型，适合预算敏感与高并发生成场景。'
             },
             {
                 value: 'gemini-3.6-flash',
@@ -1327,12 +1390,12 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'GPT-5.5',
                 label: 'GPT-5.5',
-                description: 'OpenAI 最新模型，综合能力更强，适合高质量生成与复杂任务。'
+                description: 'OpenAI 旗舰模型，综合能力均衡，适合高质量生成与复杂任务。'
             },
             {
                 value: 'GPT-5.4',
                 label: 'GPT-5.4',
-                description: 'OpenAI 最新通用模型，适合高质量生成与复杂任务。'
+                description: 'OpenAI 通用模型，适合高质量生成与复杂任务。'
             },
             {
                 value: 'GPT-5.6-Luna',
@@ -1352,7 +1415,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'Claude-Opus-4.8',
                 label: 'Claude Opus 4.8',
-                description: 'Anthropic 旗下最新旗舰模型，非常适合复杂的专业任务和高级代理。'
+                description: 'Anthropic 旗下旗舰模型，非常适合复杂的专业任务和高级代理。'
             },
             {
                 value: 'Claude-Sonnet-4.6',
@@ -1367,7 +1430,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'Grok-4.5',
                 label: 'Grok 4.5',
-                description: 'xAI 旗下最新通用模型，适合头脑风暴、创意发散与快速问答。'
+                description: 'xAI 通用模型，适合头脑风暴、创意发散与快速问答。'
             },
             {
                 value: 'deepseek-r1',
@@ -1382,7 +1445,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'deepseek-v4-flash',
                 label: 'DeepSeek V4 Flash',
-                description: 'DeepSeek V4 的高速轻量版本，但是体验也很强大，据称文本生成体验堪比 gemini-3.1-pro。'
+                description: 'DeepSeek V4 Flash 预览版，百万级上下文，兼顾质量与成本。'
             },
             {
                 value: 'deepseek-v4-pro',
@@ -1407,7 +1470,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'kimi-k2.6',
                 label: 'Kimi K2.6',
-                description: 'Moonshot AI 旗下最新模型，在多模态和智能体能力方面实现了显著飞跃。'
+                description: 'Moonshot AI 多模态模型，在多模态和智能体能力方面表现出色。'
             },
             {
                 value: 'kimi-k2.5',
@@ -1479,7 +1542,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'z-ai/glm-5.2',
                 label: 'GLM 5.2',
-                description: '智谱最新旗舰模型，1M 无损上下文，适合复杂长程任务与高质量创作。'
+                description: '智谱开源旗舰模型，支持 1M 无损上下文，适合复杂长程任务与高质量创作。'
             },
             {
                 value: 'z-ai/glm4.7',
@@ -1514,7 +1577,7 @@ export const AI_PROVIDER_CATALOG: AIProviderOption[] = [
             {
                 value: 'nvidia/nemotron-3-super-120b-a12b',
                 label: 'Nemotron 3 Super',
-                description: 'NVIDIA 最新混合 MoE 模型，适合复杂多智能体应用。'
+                description: 'NVIDIA 混合 MoE 模型，适合复杂多智能体应用。'
             },
         ]
     },

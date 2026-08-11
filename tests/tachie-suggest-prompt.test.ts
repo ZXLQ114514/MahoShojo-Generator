@@ -70,7 +70,7 @@ describe('tachie managed prompt suggestion API', () => {
     const protectedTail = '硬性禁止：标题、文字、Logo、水印。';
     const response = await handleTachieSuggestPrompt(request({
       promptId: 'image.arena.illustration',
-      variables: { report: `战报\u0000${'x'.repeat(4_100)}${protectedTail}` },
+        variables: { report: `战报\u0000${'x'.repeat(9_000)}${protectedTail}` },
     }));
     const payload = await response.json() as { prompt: string; promptId: string; source: string };
 
@@ -85,7 +85,7 @@ describe('tachie managed prompt suggestion API', () => {
     );
     const renderedRef = renderManagedPrompt.mock.calls[0]?.[1] as { variables: { report: string } };
     expect(renderedRef.variables.report).not.toContain('\u0000');
-    expect(renderedRef.variables.report).toContain('x'.repeat(4_100));
+    expect(renderedRef.variables.report).toContain('x'.repeat(9_000));
     expect(renderedRef.variables.report.endsWith(protectedTail)).toBe(true);
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AI_PROVIDER_CATALOG } from '@/lib/ai/constants';
+import { AI_PROVIDER_CATALOG, resolveAIProviderModel } from '@/lib/ai/constants';
 
 describe('ai-provider-catalog', () => {
   it('provider id 必须唯一', () => {
@@ -61,7 +61,17 @@ describe('ai-provider-catalog', () => {
       'gpt-5.2',
       'sensenova-6.7-flash-lite',
     ]);
-    expect(deepSeekProvider?.models.map(model => model.value)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro']);
+    expect(deepSeekProvider?.models.map(model => model.value)).toEqual([
+      'deepseek-v4-flash-0731',
+      'deepseek-v4-pro',
+      'deepseek-chat',
+      'deepseek-reasoner',
+      'deepseek-r1',
+    ]);
+    expect(deepSeekProvider && resolveAIProviderModel(deepSeekProvider, 'deepseek-v4-flash-0731')).toEqual({
+      modelId: 'deepseek-v4-flash',
+      isCustom: false,
+    });
     expect(newApiProvider?.baseUrl).toBe('https://api.123nhh.com/v1');
     expect(newApiProvider?.models.map(model => model.value)).toEqual(expect.arrayContaining([
       'deepseek-v4-pro',
@@ -99,63 +109,29 @@ describe('ai-provider-catalog', () => {
     expect(modelValues).toEqual(expect.arrayContaining([
       'minimax-m2.7',
       'glm-5.1',
-      'deepseek-v4-flash',
+      'deepseek-v4-flash-0731',
       'kimi-k2.6',
       'seed-2.0-pro',
     ]));
   });
 
-  it('小米 MiMo 目录区分普通 API 与 Token Plan 端点', () => {
+  it('小米 MiMo 目录只公开当前精简后的普通 API 模型', () => {
     const normalProvider = AI_PROVIDER_CATALOG.find(item => item.id === 'xiaomi-mimo');
-    const tokenPlanProviders = [
-      AI_PROVIDER_CATALOG.find(item => item.id === 'xiaomi-mimo-token-plan-cn'),
-      AI_PROVIDER_CATALOG.find(item => item.id === 'xiaomi-mimo-token-plan-ams'),
-      AI_PROVIDER_CATALOG.find(item => item.id === 'xiaomi-mimo-token-plan-sgp'),
-    ];
 
     expect(normalProvider?.name).toBe('小米 MiMo');
     expect(normalProvider?.baseUrl).toBe('https://api.xiaomimimo.com/v1');
     expect(normalProvider?.type).toBe('openai');
     expect(normalProvider?.description).toContain('sk-');
-    expect(normalProvider?.models.map(model => model.value)).toEqual(expect.arrayContaining([
+    expect(normalProvider?.models.map(model => model.value)).toEqual([
       'mimo-v2.5-pro',
       'mimo-v2.5',
-      'mimo-v2.5-flash',
-      'mimo-v2-pro',
-      'mimo-v2-omni',
-      'mimo-v2-flash',
-    ]));
-
-    expect(tokenPlanProviders.map(provider => provider?.baseUrl)).toEqual([
-      'https://token-plan-cn.xiaomimimo.com/v1',
-      'https://token-plan-ams.xiaomimimo.com/v1',
-      'https://token-plan-sgp.xiaomimimo.com/v1',
     ]);
-    for (const provider of tokenPlanProviders) {
-      expect(provider?.type).toBe('openai');
-      expect(provider?.description).toContain('tp-');
-      expect(provider?.models.map(model => model.value)).toEqual(expect.arrayContaining([
-        'mimo-v2.5-pro',
-        'mimo-v2.5',
-        'mimo-v2.5-flash',
-        'mimo-v2-pro',
-        'mimo-v2-omni',
-        'mimo-v2-flash',
-      ]));
-    }
+    expect(AI_PROVIDER_CATALOG.some(item => item.id.startsWith('xiaomi-mimo-token-plan'))).toBe(false);
   });
 
-  it('商汤 Token Plan 目录包含免费额度相关模型', () => {
+  it('不再暴露已由上游精简的独立商汤 Token Plan 入口', () => {
     const provider = AI_PROVIDER_CATALOG.find(item => item.id === 'sensenova-token-plan');
-    const modelValues = provider?.models.map(model => model.value) ?? [];
 
-    expect(provider?.name).toBe('商汤 SenseNova Token Plan');
-    expect(provider?.baseUrl).toBe('https://api.sensenova.cn/v1');
-    expect(provider?.type).toBe('openai');
-    expect(provider?.description).toContain('Token Plan');
-    expect(modelValues).toEqual(expect.arrayContaining([
-      'deepseek-v4-flash',
-      'sensenova-6.7-flash-lite',
-    ]));
+    expect(provider).toBeUndefined();
   });
 });
