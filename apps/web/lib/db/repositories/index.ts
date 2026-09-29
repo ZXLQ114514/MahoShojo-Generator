@@ -27,3 +27,5 @@ export * from '@/lib/db/repositories/messages';
 export * from '@/lib/db/repositories/data-card-reports';
 export * from '@/lib/db/repositories/report-appeals';
 export * from '@/lib/db/repositories/crowd-review';
+export * from '@/lib/db/repositories/image-generation-licenses';
+export * from '@/lib/ai-prompts/repository';
