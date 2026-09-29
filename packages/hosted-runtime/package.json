@@ -339,6 +339,16 @@
       "import": "./src/db/schema/ai-availability.ts",
       "default": "./src/db/schema/ai-availability.ts"
     },
+    "./db/schema/image-generation": {
+      "types": "./src/db/schema/image-generation.ts",
+      "import": "./src/db/schema/image-generation.ts",
+      "default": "./src/db/schema/image-generation.ts"
+    },
+    "./db/schema/ai-prompts": {
+      "types": "./src/db/schema/ai-prompts.ts",
+      "import": "./src/db/schema/ai-prompts.ts",
+      "default": "./src/db/schema/ai-prompts.ts"
+    },
     "./admin/database": {
       "types": "./src/admin/database.ts",
       "import": "./src/admin/database.ts",
