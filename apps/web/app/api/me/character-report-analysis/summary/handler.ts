@@ -37,6 +37,7 @@ const readBody = async (req: Request): Promise<SummaryRequestBody | null> => {
 
 const errorResponse = (message: string, status: number): Response => json({ error: message }, { status });
 
+
 export async function POST(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405);

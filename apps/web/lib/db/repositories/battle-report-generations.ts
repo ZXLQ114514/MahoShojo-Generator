@@ -6,7 +6,6 @@ import {
   battleReportGenerations,
   largeObjects,
   pvpMatchPlayers,
-  siteSettings,
 } from '@/lib/db/schema';
 
 export type BattleReportGenerationStatus = 'completed' | 'aborted' | 'failed';

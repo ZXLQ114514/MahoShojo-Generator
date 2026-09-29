@@ -49,7 +49,6 @@ const protectivePortWrappers = [
   'apps/web/lib/auth/activity-token.ts',
   'apps/web/lib/content-safety/server.ts',
   'apps/web/lib/sensitive-word-filter.ts',
-  'apps/web/lib/shield-word-filter.ts',
   'apps/web/lib/card-forge/content-safety.ts',
   'apps/web/lib/signature.ts',
   'apps/web/lib/db/d1-http-client.ts',
