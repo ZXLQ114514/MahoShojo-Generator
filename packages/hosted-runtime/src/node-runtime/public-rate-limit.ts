@@ -10,7 +10,9 @@ export type PublicAiRateLimitAction =
   | 'canshou_generate'
   | 'scenario_generate'
   | 'free_generate'
-  | 'sublimation_generate';
+  | 'sublimation_generate'
+  | 'public_battle_summary'
+  | 'character_report_analysis_summary';
 
 export type PublicAiProviderMode = 'system' | 'custom';
 
