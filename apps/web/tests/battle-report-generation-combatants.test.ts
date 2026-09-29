@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 const repository = vi.hoisted(() => ({
   insertBattleReportGenerationCombatants: vi.fn(),
   listBattleReportGenerationCombatantsByGenerationId: vi.fn(),
+  listBattleReportGenerationCombatantsByGenerationIds: vi.fn(),
 }));
 
 vi.mock('@/lib/db/drizzle', () => ({
@@ -22,6 +23,7 @@ describe('battle report generation combatants database wrapper', () => {
   beforeEach(() => {
     repository.insertBattleReportGenerationCombatants.mockReset();
     repository.listBattleReportGenerationCombatantsByGenerationId.mockReset();
+    repository.listBattleReportGenerationCombatantsByGenerationIds.mockReset();
   });
 
   afterEach(() => {
