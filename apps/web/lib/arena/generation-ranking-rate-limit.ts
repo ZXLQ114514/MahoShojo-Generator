@@ -1,4 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { isLocalRuntime } from '@/lib/runtime-mode';
 
 type RateLimiter = {
   limit: (input: { key: string }) => Promise<{ success: boolean }>;
@@ -36,6 +37,7 @@ const getActorIdentity = (req: Request, ip: string): string => {
 };
 
 export const getGenerationRankingRateLimitBindings = (): GenerationRankingRateLimitBindings | null => {
+  if (isLocalRuntime()) return null;
   try {
     const { env } = getCloudflareContext();
     return env as GenerationRankingRateLimitBindings;

@@ -1,5 +1,6 @@
 // lib/r2.ts
 import { AwsClient } from 'aws4fetch';
+import { isLocalRuntime } from '@/lib/runtime-mode';
 
 type UploadBody = string | ArrayBuffer | Uint8Array | Blob | ReadableStream | null;
 
@@ -91,6 +92,59 @@ const normalizeBody = (body: UploadBody): BodyInit | undefined => {
     throw new Error('不支持的 R2 上传体类型');
 };
 
+type LocalFs = {
+    promises: {
+        mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
+        writeFile(path: string, data: Uint8Array): Promise<void>;
+        readFile(path: string): Promise<Uint8Array>;
+        unlink(path: string): Promise<void>;
+        readdir(path: string, options: { withFileTypes: true }): Promise<Array<{ name: string; isDirectory(): boolean }>>;
+        stat(path: string): Promise<{ size: number; mtime: Date }>;
+    };
+};
+
+const getLocalFs = (): LocalFs => {
+    const dynamicRequire = eval('require') as (moduleName: string) => LocalFs;
+    return dynamicRequire('node:fs');
+};
+
+const getLocalPath = (key: string): string => {
+    const dynamicRequire = eval('require') as (moduleName: string) => { resolve(...parts: string[]): string; join(...parts: string[]): string };
+    const path = dynamicRequire('node:path');
+    const root = path.resolve(process.env.MAHOSHOJO_LOCAL_OBJECTS_DIR?.trim() || '.local/objects');
+    const normalizedKey = key.replace(/^\/+/, '').replace(/\\/g, '/');
+    const target = path.resolve(root, normalizedKey);
+    if (target !== root && !target.startsWith(`${root}${pathSeparator()}`)) {
+        throw new Error('本地对象键包含非法路径');
+    }
+    return target;
+};
+
+const pathSeparator = (): string => {
+    const dynamicRequire = eval('require') as (moduleName: string) => { sep: string };
+    return dynamicRequire('node:path').sep;
+};
+
+const bodyToBytes = async (body: UploadBody): Promise<Uint8Array> => {
+    if (body === null) return new Uint8Array();
+    if (typeof body === 'string') return new TextEncoder().encode(body);
+    if (body instanceof Uint8Array) return body;
+    if (body instanceof ArrayBuffer) return new Uint8Array(body);
+    if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
+    if (body instanceof ReadableStream) return new Uint8Array(await new Response(body).arrayBuffer());
+    throw new Error('不支持的对象体类型');
+};
+
+const putLocalObject = async (key: string, body: UploadBody): Promise<R2Result<{ etag: string | null }>> => {
+    const localPath = getLocalPath(key);
+    const dynamicRequire = eval('require') as (moduleName: string) => { dirname(path: string): string };
+    const bytes = await bodyToBytes(body);
+    const fs = getLocalFs().promises;
+    await fs.mkdir(dynamicRequire('node:path').dirname(localPath), { recursive: true });
+    await fs.writeFile(localPath, bytes);
+    return { success: true, status: 200, data: { etag: null } };
+};
+
 /**
  * 上传对象到 R2
  * @param key 对象键，可以包含文件夹比如 test/xxx.txt
@@ -104,6 +158,7 @@ export async function putObject(
     options: PutObjectOptions = {}
 ): Promise<R2Result<{ etag: string | null }>> {
     try {
+        if (isLocalRuntime()) return await putLocalObject(key, body);
         assertConfig();
         const url = buildObjectUrl(key);
         const headers = new Headers();
@@ -156,6 +211,10 @@ export async function getObjectText(
     options: { responseContentType?: string; expiresInSeconds?: number } = {}
 ): Promise<R2Result<{ text: string }>> {
     try {
+        if (isLocalRuntime()) {
+            const bytes = await getLocalFs().promises.readFile(getLocalPath(key));
+            return { success: true, status: 200, data: { text: new TextDecoder().decode(bytes) } };
+        }
         assertConfig();
         const url = await generatePresignedUrl(key, {
             method: 'GET',
@@ -181,6 +240,14 @@ export async function getObjectText(
  */
 export async function deleteObject(key: string): Promise<R2Result> {
     try {
+        if (isLocalRuntime()) {
+            try {
+                await getLocalFs().promises.unlink(getLocalPath(key));
+            } catch (error) {
+                if ((error as { code?: string }).code !== 'ENOENT') throw error;
+            }
+            return { success: true, status: 200 };
+        }
         assertConfig();
         const url = buildObjectUrl(key);
         const signed = await r2Client!.sign(url, { method: 'DELETE' });
@@ -204,6 +271,7 @@ export async function deleteObject(key: string): Promise<R2Result> {
  * @returns 预签名 URL
  */
 export async function generatePresignedUrl(key: string, options: PresignOptions = {}): Promise<string> {
+    if (isLocalRuntime()) return `file://${getLocalPath(key)}`;
     assertConfig();
     const method = options.method || 'GET';
     const expires = options.expiresInSeconds ?? 3600;
@@ -231,6 +299,27 @@ export async function generatePresignedUrl(key: string, options: PresignOptions 
  */
 export const listObjects = async (prefix: string): Promise<R2Result<R2ObjectSummary[]>> => {
     try {
+        if (isLocalRuntime()) {
+            const dynamicRequire = eval('require') as (moduleName: string) => { join(...parts: string[]): string };
+            const path = dynamicRequire('node:path');
+            const root = path.join(process.env.MAHOSHOJO_LOCAL_OBJECTS_DIR?.trim() || '.local/objects');
+            const normalizedPrefix = prefix.replace(/^\/+/, '').replace(/\\/g, '/');
+            const data: R2ObjectSummary[] = [];
+            const visit = async (directory: string): Promise<void> => {
+                let entries: Array<{ name: string; isDirectory(): boolean }>;
+                try { entries = await getLocalFs().promises.readdir(directory, { withFileTypes: true }); } catch { return; }
+                for (const entry of entries) {
+                    const fullPath = path.join(directory, entry.name);
+                    if (entry.isDirectory()) { await visit(fullPath); continue; }
+                    const key = fullPath.slice(root.length + 1).replace(/\\/g, '/');
+                    if (!key.startsWith(normalizedPrefix)) continue;
+                    const info = await getLocalFs().promises.stat(fullPath);
+                    data.push({ key, size: info.size, lastModified: info.mtime.toISOString() });
+                }
+            };
+            await visit(root);
+            return { success: true, status: 200, data };
+        }
         assertConfig();
         const sanitizedPrefix = prefix.replace(/^\/+/, '');
         const url = new URL(`${endpoint}/${required.bucketName}`);

@@ -59,6 +59,10 @@ next-env.d.ts
 
 # wrangler
 .wrangler/
+.local/
+
+# 本地 opencode 配置（含本地 provider 凭据，不提交）
+opencode.jsonc
 
 # IDEs and editors
 .idea/

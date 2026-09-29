@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { loadRepositoryRootEnvFallback } from "./config/load-root-env-fallback";
 import { buildStaticBrowserSecurityHeaders } from "./lib/security/browser-headers";
+import { isLocalRuntime } from "./lib/runtime-mode";
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -13,7 +14,7 @@ const createNextConfig = (phase: string): NextConfig => {
   // legacy ignored root .env* can still supply missing local values.
   loadRepositoryRootEnvFallback(repositoryRoot, phase === PHASE_DEVELOPMENT_SERVER);
 
-  if (phase === PHASE_DEVELOPMENT_SERVER) {
+  if (phase === PHASE_DEVELOPMENT_SERVER && !isLocalRuntime()) {
     initOpenNextCloudflareForDev();
   }
 
