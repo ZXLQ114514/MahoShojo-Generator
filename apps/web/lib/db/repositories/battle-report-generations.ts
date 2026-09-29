@@ -1,10 +1,19 @@
-import { and, asc, count, desc, eq, gte, isNotNull, like, not, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, exists, gte, isNotNull, isNull, like, lte, ne, not, or, sql, type SQL } from 'drizzle-orm';
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
-import { battleReportGenerationParticipants, battleReportGenerations } from '@/lib/db/schema';
+import {
+  battleReportGenerationCombatants,
+  battleReportGenerationParticipants,
+  battleReportGenerations,
+  largeObjects,
+  pvpMatchPlayers,
+  siteSettings,
+} from '@/lib/db/schema';
 
 export type BattleReportGenerationStatus = 'completed' | 'aborted' | 'failed';
 export type BattleReportGenerationMode = 'stream' | 'non-stream';
 export type BattleReportGenerationListSort = 'started_at_desc' | 'started_at_asc';
+export type BattleReportPublicListSort = 'published_at_desc' | 'published_at_asc';
+export type BattleReportCharacterAnalysisSort = 'started_at_desc' | 'started_at_asc';
 export type BattleReportGenerationParticipantRole = 'host' | 'member' | null;
 
 export type BattleReportGenerationAccessRow = {
@@ -13,6 +22,45 @@ export type BattleReportGenerationAccessRow = {
   pvpMatchId: string | null;
   arenaParticipantGenerationId: string | null;
   arenaParticipantRole: BattleReportGenerationParticipantRole;
+};
+
+export type BattleReportPublicListFilter = {
+  titleQuery?: string;
+  sort?: BattleReportPublicListSort;
+};
+
+export type BattleReportCharacterAnalysisFilter = {
+  fromIso?: string;
+  toIso?: string;
+  uploaderUsername?: string;
+  sort?: BattleReportCharacterAnalysisSort;
+  /** 仅用于裁剪战报正文，不影响既有统计范围。 */
+  viewerUserId?: number;
+};
+
+export type PublicBattleReportKDRow = {
+  generationId: string;
+  startedAt: string;
+  publicSince: string | null;
+  username: string | null;
+  winner: string | null;
+  combatantName: string;
+};
+
+export type BattleReportCharacterAnalysisRow = {
+  generationId: string;
+  startedAt: string;
+  username: string | null;
+  userId: number | null;
+  mode: string;
+  generationMode: BattleReportGenerationMode;
+  winner: string | null;
+  headline: string | null;
+  note: string | null;
+  outputPreview: string | null;
+  outputChars: number | null;
+  outputHasSensitiveWords: boolean | null;
+  outputHasShieldWords: boolean | null;
 };
 
 export type BattleReportGenerationsListFilter = {
@@ -95,6 +143,7 @@ export type BattleReportGenerationRowLite = {
   generation_mode: BattleReportGenerationMode;
   endpoint: string;
   user_id: number | null;
+  username: string | null;
   mode: string;
   scenario_title: string | null;
   ai_model: string | null;
@@ -105,6 +154,8 @@ export type BattleReportGenerationRowLite = {
   story_length: string | null;
   headline: string | null;
   winner: string | null;
+  note: string | null;
+  output_chars: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
   total_tokens: number | null;
@@ -113,6 +164,8 @@ export type BattleReportGenerationRowLite = {
   output_preview: string | null;
   output_has_sensitive_words: number | null;
   output_has_shield_words: number | null;
+  is_public: number;
+  public_since: string | null;
   extra_json: string | null;
   pvp_room_id: string | null;
   pvp_match_id: string | null;
@@ -147,6 +200,13 @@ const toIntOrNull = (value: unknown): number | null => {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
   if (!Number.isFinite(n)) return null;
   return Math.trunc(n);
+};
+
+const toBoolOrNull = (value: unknown): boolean | null => {
+  if (value == null) return null;
+  if (value === true || value === 1 || value === '1') return true;
+  if (value === false || value === 0 || value === '0') return false;
+  return null;
 };
 
 const toParticipantRole = (value: unknown): BattleReportGenerationParticipantRole => (
@@ -222,6 +282,8 @@ const mapLiteRow = (row: {
   generationMode: string;
   endpoint: string;
   userId: number | null;
+  // 公开列表/分析查询会额外选出这些列；用户自有列表查询不带，映射时降级为 null。
+  username?: string | null;
   mode: string | null;
   scenarioTitle: string | null;
   aiModel: string | null;
@@ -232,6 +294,8 @@ const mapLiteRow = (row: {
   storyLength: string | null;
   headline: string | null;
   winner: string | null;
+  note?: string | null;
+  outputChars?: number | null;
   promptTokens: number | null;
   completionTokens: number | null;
   totalTokens: number | null;
@@ -240,6 +304,8 @@ const mapLiteRow = (row: {
   outputPreview: string | null;
   outputHasSensitiveWords: number | null;
   outputHasShieldWords: number | null;
+  isPublic?: number | null;
+  publicSince?: string | null;
   extraJson: string | null;
   pvpRoomId: string | null;
   pvpMatchId: string | null;
@@ -258,6 +324,7 @@ const mapLiteRow = (row: {
   generation_mode: (row.generationMode === 'non-stream' ? 'non-stream' : 'stream') as BattleReportGenerationMode,
   endpoint: row.endpoint,
   user_id: toIntOrNull(row.userId),
+  username: row.username ?? null,
   mode: row.mode ?? '',
   scenario_title: row.scenarioTitle,
   ai_model: row.aiModel,
@@ -268,6 +335,8 @@ const mapLiteRow = (row: {
   story_length: row.storyLength,
   headline: row.headline,
   winner: row.winner,
+  note: row.note ?? null,
+  output_chars: toIntOrNull(row.outputChars),
   prompt_tokens: toIntOrNull(row.promptTokens),
   completion_tokens: toIntOrNull(row.completionTokens),
   total_tokens: toIntOrNull(row.totalTokens),
@@ -276,6 +345,8 @@ const mapLiteRow = (row: {
   output_preview: row.outputPreview,
   output_has_sensitive_words: toIntOrNull(row.outputHasSensitiveWords),
   output_has_shield_words: toIntOrNull(row.outputHasShieldWords),
+  is_public: toInt(row.isPublic, 0),
+  public_since: row.publicSince ?? null,
   extra_json: row.extraJson,
   pvp_room_id: row.pvpRoomId,
   pvp_match_id: row.pvpMatchId,
@@ -632,4 +703,336 @@ export const updateBattleReportGenerationOutputHasSensitiveWords = async (
     .returning({ id: battleReportGenerations.id });
 
   return updated.length > 0;
+};
+export const updateBattleReportGenerationPublication = async (
+  db: AppDrizzleDb,
+  generationId: string,
+  isPublic: boolean,
+  nowIso: string,
+  mode?: string | null,
+): Promise<boolean> => {
+  const updated = await db
+    .update(battleReportGenerations)
+    .set({
+      isPublic: isPublic ? 1 : 0,
+      publicSince: isPublic ? sql`COALESCE(${battleReportGenerations.publicSince}, ${nowIso})` : null,
+      updatedAt: nowIso,
+      ...(mode ? { mode } : {}),
+    })
+    .where(eq(battleReportGenerations.id, generationId))
+    .returning({ id: battleReportGenerations.id });
+
+  return updated.length > 0;
+};
+
+export const updateBattleReportGenerationNote = async (
+  db: AppDrizzleDb,
+  generationId: string,
+  note: string | null,
+): Promise<boolean> => {
+  const rows = await db
+    .update(battleReportGenerations)
+    .set({ note, updatedAt: new Date().toISOString() })
+    .where(eq(battleReportGenerations.id, generationId))
+    .returning({ id: battleReportGenerations.id });
+  return rows.length > 0;
+};
+
+export const deleteBattleReportGenerationRecord = async (db: AppDrizzleDb, generationId: string): Promise<boolean> => {
+  const safeId = generationId.trim();
+  if (!safeId) return false;
+  await db.delete(battleReportGenerationCombatants).where(eq(battleReportGenerationCombatants.generationId, safeId));
+  await db.delete(largeObjects).where(and(
+    eq(largeObjects.kind, 'battle_report_generation_output'),
+    eq(largeObjects.ownerRefId, safeId),
+  ));
+  const rows = await db.delete(battleReportGenerations)
+    .where(eq(battleReportGenerations.id, safeId))
+    .returning({ id: battleReportGenerations.id });
+  return rows.length > 0;
+};
+
+export const listPublicBattleReportGenerationsLite = async (
+  db: AppDrizzleDb,
+  limit: number,
+  offset: number,
+  filter?: BattleReportPublicListFilter,
+): Promise<BattleReportGenerationRowLite[]> => {
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const conditions = [
+    eq(battleReportGenerations.isPublic, 1),
+    eq(battleReportGenerations.status, 'completed'),
+  ];
+  const titleQuery = typeof filter?.titleQuery === 'string' ? filter.titleQuery.trim().slice(0, 120) : '';
+  if (titleQuery) {
+    const pattern = `%${titleQuery}%`;
+    conditions.push(or(like(battleReportGenerations.headline, pattern), like(battleReportGenerations.scenarioTitle, pattern))!);
+  }
+
+  const rows = await db
+    .select({
+      id: battleReportGenerations.id,
+      startedAt: battleReportGenerations.startedAt,
+      endedAt: battleReportGenerations.endedAt,
+      durationMs: battleReportGenerations.durationMs,
+      status: battleReportGenerations.status,
+      generationMode: battleReportGenerations.generationMode,
+      endpoint: battleReportGenerations.endpoint,
+      userId: battleReportGenerations.userId,
+      username: battleReportGenerations.username,
+      mode: battleReportGenerations.mode,
+      scenarioTitle: battleReportGenerations.scenarioTitle,
+      aiModel: battleReportGenerations.aiModel,
+      scenarioDataCardId: battleReportGenerations.scenarioDataCardId,
+      scenarioDataCardUpdatedAt: battleReportGenerations.scenarioDataCardUpdatedAt,
+      language: battleReportGenerations.language,
+      selectedLevel: battleReportGenerations.selectedLevel,
+      storyLength: battleReportGenerations.storyLength,
+      headline: battleReportGenerations.headline,
+      winner: battleReportGenerations.winner,
+      note: battleReportGenerations.note,
+      outputChars: battleReportGenerations.outputChars,
+      promptTokens: battleReportGenerations.promptTokens,
+      completionTokens: battleReportGenerations.completionTokens,
+      totalTokens: battleReportGenerations.totalTokens,
+      cachedTokens: battleReportGenerations.cachedTokens,
+      reasoningTokens: battleReportGenerations.reasoningTokens,
+      outputPreview: battleReportGenerations.outputPreview,
+      outputHasSensitiveWords: battleReportGenerations.outputHasSensitiveWords,
+      outputHasShieldWords: battleReportGenerations.outputHasShieldWords,
+      isPublic: battleReportGenerations.isPublic,
+      publicSince: battleReportGenerations.publicSince,
+      extraJson: battleReportGenerations.extraJson,
+      pvpRoomId: battleReportGenerations.pvpRoomId,
+      pvpMatchId: battleReportGenerations.pvpMatchId,
+      pvpRoundId: battleReportGenerations.pvpRoundId,
+      createdAt: battleReportGenerations.createdAt,
+      updatedAt: battleReportGenerations.updatedAt,
+      arenaMultiplayer: arenaMultiplayerPredicate,
+    })
+    .from(battleReportGenerations)
+    .where(and(...conditions))
+    .orderBy(filter?.sort === 'published_at_asc' ? asc(battleReportGenerations.publicSince) : desc(battleReportGenerations.publicSince))
+    .limit(safeLimit)
+    .offset(safeOffset);
+
+  return rows.map(mapLiteRow);
+};
+
+export const listPublicBattleReportKDRows = async (
+  db: AppDrizzleDb,
+  filter: { fromIso?: string; toIso?: string; username?: string } = {},
+): Promise<PublicBattleReportKDRow[]> => {
+  const arenaEndpoints = [
+    'api/arena/generate',
+    '/api/arena/generate',
+    'api/arena/generate-stream',
+    '/api/arena/generate-stream',
+    'api/arena/continuous-bundle',
+    '/api/arena/continuous-bundle',
+    'api/generate-battle-story',
+    '/api/generate-battle-story',
+  ];
+  const conditions = [
+    eq(battleReportGenerations.isPublic, 1),
+    eq(battleReportGenerations.status, 'completed'),
+    isNull(battleReportGenerations.pvpMatchId),
+    or(isNull(battleReportGenerations.mode), ne(battleReportGenerations.mode, 'daily'))!,
+    or(...arenaEndpoints.map((endpoint) => eq(battleReportGenerations.endpoint, endpoint)))!,
+  ];
+
+  if (filter.fromIso) conditions.push(gte(battleReportGenerations.startedAt, filter.fromIso));
+  if (filter.toIso) conditions.push(lte(battleReportGenerations.startedAt, filter.toIso));
+  if (filter.username) conditions.push(eq(battleReportGenerations.username, filter.username));
+
+  const rows = await db
+    .select({
+      generationId: battleReportGenerations.id,
+      startedAt: battleReportGenerations.startedAt,
+      publicSince: battleReportGenerations.publicSince,
+      username: battleReportGenerations.username,
+      winner: battleReportGenerations.winner,
+      combatantName: battleReportGenerationCombatants.name,
+    })
+    .from(battleReportGenerations)
+    .innerJoin(
+      battleReportGenerationCombatants,
+      eq(battleReportGenerationCombatants.generationId, battleReportGenerations.id),
+    )
+    .where(and(...conditions))
+    .orderBy(asc(battleReportGenerations.startedAt), asc(battleReportGenerationCombatants.sortIndex));
+
+  return rows.map((row) => ({
+    generationId: row.generationId,
+    startedAt: row.startedAt,
+    publicSince: row.publicSince,
+    username: row.username,
+    winner: row.winner,
+    combatantName: row.combatantName,
+  }));
+};
+
+const buildCharacterAnalysisExistsCondition = (db: AppDrizzleDb, dataCardId: string): SQL => {
+  const trimmed = dataCardId.trim();
+  return exists(
+    db
+      .select({ one: sql<number>`1` })
+      .from(battleReportGenerationCombatants)
+      .where(and(
+        eq(battleReportGenerationCombatants.generationId, battleReportGenerations.id),
+        eq(battleReportGenerationCombatants.dataCardId, trimmed),
+      )),
+  );
+};
+
+const buildCharacterAnalysisConditions = (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  filter?: BattleReportCharacterAnalysisFilter,
+): SQL[] => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) {
+    return [];
+  }
+
+  const conditions: SQL[] = [
+    eq(battleReportGenerations.status, 'completed'),
+    buildCharacterAnalysisExistsCondition(db, safeCardId),
+  ];
+
+  const fromIso = typeof filter?.fromIso === 'string' ? filter.fromIso.trim() : '';
+  if (fromIso) {
+    conditions.push(gte(battleReportGenerations.startedAt, fromIso));
+  }
+
+  const toIso = typeof filter?.toIso === 'string' ? filter.toIso.trim() : '';
+  if (toIso) {
+    conditions.push(lte(battleReportGenerations.startedAt, toIso));
+  }
+
+  const uploaderUsername = typeof filter?.uploaderUsername === 'string' ? filter.uploaderUsername.trim() : '';
+  if (uploaderUsername) {
+    conditions.push(eq(battleReportGenerations.username, uploaderUsername));
+  }
+
+  return conditions;
+};
+
+const buildCharacterAnalysisOutputVisibilityCondition = (
+  db: AppDrizzleDb,
+  viewerUserId: number | undefined,
+): SQL => {
+  const safeViewerUserId = typeof viewerUserId === 'number' && Number.isSafeInteger(viewerUserId) && viewerUserId > 0
+    ? viewerUserId
+    : null;
+  if (safeViewerUserId === null) {
+    return sql`0`;
+  }
+
+  return or(
+    eq(battleReportGenerations.userId, safeViewerUserId),
+    eq(battleReportGenerations.isPublic, 1),
+    exists(
+      db
+        .select({ one: sql<number>`1` })
+        .from(pvpMatchPlayers)
+        .where(and(
+          eq(pvpMatchPlayers.matchId, battleReportGenerations.pvpMatchId),
+          eq(pvpMatchPlayers.userId, safeViewerUserId),
+        )),
+    ),
+  ) ?? sql`0`;
+};
+
+export const countBattleReportGenerationsByCharacterAnalysis = async (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  filter?: BattleReportCharacterAnalysisFilter,
+): Promise<number> => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) return 0;
+
+  const rows = await db
+    .select({ total: count() })
+    .from(battleReportGenerations)
+    .where(and(...buildCharacterAnalysisConditions(db, safeCardId, filter)));
+
+  return Math.max(0, toInt(rows[0]?.total, 0));
+};
+
+export const listBattleReportGenerationsByCharacterAnalysis = async (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  limit: number | null | undefined,
+  offset: number | null | undefined = 0,
+  filter?: BattleReportCharacterAnalysisFilter,
+): Promise<BattleReportCharacterAnalysisRow[]> => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) return [];
+
+  const safeOffset = Math.max(0, Math.floor(typeof offset === 'number' && Number.isFinite(offset) ? offset : 0));
+  const outputVisible = buildCharacterAnalysisOutputVisibilityCondition(db, filter?.viewerUserId);
+  const rowsQuery = db
+    .select({
+      generationId: battleReportGenerations.id,
+      startedAt: battleReportGenerations.startedAt,
+      username: battleReportGenerations.username,
+      userId: battleReportGenerations.userId,
+      mode: battleReportGenerations.mode,
+      generationMode: battleReportGenerations.generationMode,
+      winner: battleReportGenerations.winner,
+      headline: battleReportGenerations.headline,
+      note: battleReportGenerations.note,
+      // 角色卡关联并不等于可以读取战报正文。私有正文只对上传者或 PVP 参与者可见。
+      outputPreview: sql<string | null>`CASE WHEN ${outputVisible} THEN ${battleReportGenerations.outputPreview} ELSE NULL END`,
+      outputChars: battleReportGenerations.outputChars,
+      outputHasSensitiveWords: battleReportGenerations.outputHasSensitiveWords,
+      outputHasShieldWords: battleReportGenerations.outputHasShieldWords,
+    })
+    .from(battleReportGenerations)
+    .where(and(...buildCharacterAnalysisConditions(db, safeCardId, filter)))
+    .orderBy(filter?.sort === 'started_at_asc' ? asc(battleReportGenerations.startedAt) : desc(battleReportGenerations.startedAt))
+    .offset(safeOffset);
+
+  const safeLimit = typeof limit === 'number' && Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : null;
+  const rows = safeLimit && safeLimit > 0 ? await rowsQuery.limit(safeLimit) : await rowsQuery;
+
+  return rows.map((row) => ({
+    generationId: row.generationId,
+    startedAt: row.startedAt,
+    username: row.username,
+    userId: row.userId,
+    mode: typeof row.mode === 'string' && row.mode.trim() ? row.mode.trim() : '未知模式',
+    generationMode: row.generationMode === 'stream' ? 'stream' : 'non-stream',
+    winner: row.winner,
+    headline: row.headline,
+    note: row.note,
+    outputPreview: row.outputPreview,
+    outputChars: toIntOrNull(row.outputChars),
+    outputHasSensitiveWords: toBoolOrNull(row.outputHasSensitiveWords),
+    outputHasShieldWords: toBoolOrNull(row.outputHasShieldWords),
+  }));
+};
+
+export const listBattleReportCharacterAnalysisUploaders = async (
+  db: AppDrizzleDb,
+  dataCardId: string,
+  filter?: Pick<BattleReportCharacterAnalysisFilter, 'fromIso' | 'toIso'>,
+): Promise<string[]> => {
+  const safeCardId = dataCardId.trim();
+  if (!safeCardId) return [];
+
+  const rows = await db
+    .select({
+      username: battleReportGenerations.username,
+    })
+    .from(battleReportGenerations)
+    .where(and(...buildCharacterAnalysisConditions(db, safeCardId, filter)))
+    .groupBy(battleReportGenerations.username)
+    .orderBy(asc(battleReportGenerations.username));
+
+  return rows
+    .map((row) => (typeof row.username === 'string' ? row.username.trim() : ''))
+    .filter((username) => Boolean(username));
 };

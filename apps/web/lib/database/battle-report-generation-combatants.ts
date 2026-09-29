@@ -25,6 +25,10 @@ type CombatantsRepoBundle = {
     db: unknown,
     generationId: string,
   ) => Promise<BattleReportGenerationCombatantRow[]>;
+  listBattleReportGenerationCombatantsByGenerationIds: (
+    db: unknown,
+    generationIds: string[],
+  ) => Promise<BattleReportGenerationCombatantRow[]>;
 };
 
 const COMBATANTS_WRITE_ERROR = 'combatants-write-failed';
@@ -43,6 +47,7 @@ const readCombatantsRepoBundle = async (): Promise<CombatantsRepoBundle | null> 
       db,
       insertBattleReportGenerationCombatants: repo.insertBattleReportGenerationCombatants as CombatantsRepoBundle['insertBattleReportGenerationCombatants'],
       listBattleReportGenerationCombatantsByGenerationId: repo.listBattleReportGenerationCombatantsByGenerationId as CombatantsRepoBundle['listBattleReportGenerationCombatantsByGenerationId'],
+      listBattleReportGenerationCombatantsByGenerationIds: repo.listBattleReportGenerationCombatantsByGenerationIds as CombatantsRepoBundle['listBattleReportGenerationCombatantsByGenerationIds'],
     };
   } catch {
     return null;
@@ -96,6 +101,21 @@ export async function getBattleReportGenerationCombatantsByGenerationId(
     return await bundle.listBattleReportGenerationCombatantsByGenerationId(bundle.db, generationId);
   } catch {
     console.error('读取 battle_report_generation_combatants 失败:', {
+      errorClass: COMBATANTS_READ_ERROR,
+    });
+    return [];
+  }
+}
+
+export async function getBattleReportGenerationCombatantsByGenerationIds(
+  generationIds: string[],
+): Promise<BattleReportGenerationCombatantRow[]> {
+  try {
+    const bundle = await readCombatantsRepoBundle();
+    if (!bundle) return [];
+    return await bundle.listBattleReportGenerationCombatantsByGenerationIds(bundle.db, generationIds);
+  } catch {
+    console.error('批量读取 battle_report_generation_combatants 失败:', {
       errorClass: COMBATANTS_READ_ERROR,
     });
     return [];

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
 import { battleReportGenerationCombatants } from '@/lib/db/schema';
 
@@ -133,4 +133,62 @@ export const listBattleReportGenerationCombatantsByGenerationId = async (
     size_bytes: toIntOrNull(row.sizeBytes),
     created_at: row.createdAt,
   }));
+};
+
+const GENERATION_IDS_QUERY_BATCH_SIZE = 90;
+
+export const listBattleReportGenerationCombatantsByGenerationIds = async (
+  db: AppDrizzleDb,
+  generationIds: string[],
+): Promise<BattleReportGenerationCombatantDbRow[]> => {
+  const safeIds = [...new Set(generationIds.map((id) => id.trim()).filter(Boolean))];
+  if (safeIds.length === 0) return [];
+
+  const result: BattleReportGenerationCombatantDbRow[] = [];
+  for (let offset = 0; offset < safeIds.length; offset += GENERATION_IDS_QUERY_BATCH_SIZE) {
+    const batchIds = safeIds.slice(offset, offset + GENERATION_IDS_QUERY_BATCH_SIZE);
+    const rows = await db
+      .select({
+        generationId: battleReportGenerationCombatants.generationId,
+        sortIndex: battleReportGenerationCombatants.sortIndex,
+        name: battleReportGenerationCombatants.name,
+        type: battleReportGenerationCombatants.type,
+        templateId: battleReportGenerationCombatants.templateId,
+        isNative: battleReportGenerationCombatants.isNative,
+        isPreset: battleReportGenerationCombatants.isPreset,
+        teamId: battleReportGenerationCombatants.teamId,
+        characterGuidance: battleReportGenerationCombatants.characterGuidance,
+        dataCardId: battleReportGenerationCombatants.dataCardId,
+        dataCardUpdatedAt: battleReportGenerationCombatants.dataCardUpdatedAt,
+        sizeChars: battleReportGenerationCombatants.sizeChars,
+        sizeBytes: battleReportGenerationCombatants.sizeBytes,
+        createdAt: battleReportGenerationCombatants.createdAt,
+      })
+      .from(battleReportGenerationCombatants)
+      .where(inArray(battleReportGenerationCombatants.generationId, batchIds))
+      .orderBy(battleReportGenerationCombatants.generationId, battleReportGenerationCombatants.sortIndex);
+
+    result.push(...rows.map((row) => ({
+      generation_id: row.generationId,
+      sort_index: toInt(row.sortIndex, 0),
+      name: row.name,
+      type: typeof row.type === 'string' ? row.type : null,
+      template_id: typeof row.templateId === 'string' ? row.templateId : null,
+      is_native: toIntOrNull(row.isNative),
+      is_preset: toIntOrNull(row.isPreset),
+      team_id: toIntOrNull(row.teamId),
+      character_guidance: typeof row.characterGuidance === 'string' ? row.characterGuidance : null,
+      data_card_id: typeof row.dataCardId === 'string' ? row.dataCardId : null,
+      data_card_updated_at: typeof row.dataCardUpdatedAt === 'string' ? row.dataCardUpdatedAt : null,
+      size_chars: toIntOrNull(row.sizeChars),
+      size_bytes: toIntOrNull(row.sizeBytes),
+      created_at: row.createdAt,
+    })));
+  }
+
+  return result.sort((left, right) => {
+    if (left.generation_id < right.generation_id) return -1;
+    if (left.generation_id > right.generation_id) return 1;
+    return left.sort_index - right.sort_index;
+  });
 };

@@ -184,6 +184,11 @@
       "import": "./src/node-runtime/shield-word-filter.ts",
       "default": "./src/node-runtime/shield-word-filter.ts"
     },
+    "./node-runtime/word-filter-utils": {
+      "types": "./src/node-runtime/word-filter-utils.ts",
+      "import": "./src/node-runtime/word-filter-utils.ts",
+      "default": "./src/node-runtime/word-filter-utils.ts"
+    },
     "./node-runtime/game-card-content-safety": {
       "types": "./src/node-runtime/game-card-content-safety.ts",
       "import": "./src/node-runtime/game-card-content-safety.ts",
