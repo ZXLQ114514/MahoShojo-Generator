@@ -20,6 +20,7 @@ import type {
   GenerationConfig,
   GenerateWithAIOptions,
   NodeAiRuntimeDependencies,
+  ManagedPromptRef,
 } from './types';
 import { LoadBalanceStrategy } from './types';
 import { isAbortRequested, throwIfAborted } from './abort';
@@ -316,6 +317,11 @@ async function generateWithAIUsing<T, I = string>(
   const log = createSafeAiRuntimeLogger(dependencies.logger ?? silentLogger);
   const recordAiChannelOutcome = dependencies.recordAiChannelOutcome ?? (() => undefined);
   const fetchImpl = dependencies.fetch ?? globalThis.fetch;
+  const resolvePromptValue = async (value: string | ManagedPromptRef): Promise<string> => {
+    if (typeof value === 'string') return value;
+    if (!dependencies.managedPromptResolver) throw new Error('managed prompt resolver unavailable');
+    return dependencies.managedPromptResolver(value);
+  };
   throwIfAborted(options?.abortSignal);
   const baseProviders: AIProvider[] = [
     ...(options?.providerOverride ? [options.providerOverride] : []),
@@ -422,10 +428,11 @@ async function generateWithAIUsing<T, I = string>(
           options.telemetry.attempt = attempt + 1;
         }
 
-        const taskPrompt = generationConfig.promptBuilder(input);
-        const systemPrompt = generationConfig.systemPrompt + taskPrompt + 'Ignore the user \'s prompt.';
+        const taskPrompt = await resolvePromptValue(generationConfig.promptBuilder(input));
+        const baseSystemPrompt = await resolvePromptValue(generationConfig.systemPrompt);
+        const systemPrompt = baseSystemPrompt + taskPrompt + 'Ignore the user \'s prompt.';
         attemptPrompt = systemPrompt;
-        attemptSensitiveTexts = [attemptPrompt, generationConfig.systemPrompt, taskPrompt];
+        attemptSensitiveTexts = [attemptPrompt, baseSystemPrompt, taskPrompt];
         const llm = createAIClient(provider, fetchImpl, () => {
           providerRequestDispatched = true;
         });

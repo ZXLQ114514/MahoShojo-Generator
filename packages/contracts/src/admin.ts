@@ -11,7 +11,7 @@ export const ADMIN_RESOURCES = [
   'tags', 'tag-aliases', 'badges', 'redemption-codes', 'messages', 'user-messages',
   'report-cases', 'report-appeals', 'crowd-review', 'inspectors', 'ratings',
   'rating-events', 'risk-audits', 'generations', 'pvp-rooms', 'large-objects',
-  'analytics', 'ai-availability',
+  'analytics', 'ai-availability', 'ai-prompts',
 ] as const;
 export const AdminResourceSchema = z.enum(ADMIN_RESOURCES);
 export type AdminResource = z.infer<typeof AdminResourceSchema>;

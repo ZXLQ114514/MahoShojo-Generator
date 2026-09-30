@@ -103,6 +103,8 @@ export {
   type AiTelemetry,
   type GenerationConfig,
   type GenerateWithAIOptions,
+  type ManagedPromptRef,
+  type ManagedPromptResolver,
   type NodeAiRuntimeDependencies,
   type RawGenerationConfig,
   type RawReasoningStreamEvent,

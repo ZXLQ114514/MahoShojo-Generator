@@ -22,6 +22,7 @@ import type {
     NodeAiRuntimeDependencies,
     RawGenerationConfig,
     RawReasoningStreamEvent,
+    ManagedPromptRef,
 } from './types';
 import { LoadBalanceStrategy } from './types';
 import { isAbortRequested, throwIfAborted } from './abort';
@@ -164,6 +165,12 @@ async function generateWithStreamAIUsing(
 }> {
     const log = createSafeAiRuntimeLogger(dependencies.logger ?? silentLogger);
     const fetchImpl = dependencies.fetch ?? globalThis.fetch;
+    const resolvePromptValue = async (value: string | ManagedPromptRef): Promise<string> => {
+        if (typeof value === 'string') return value;
+        if (!dependencies.managedPromptResolver) throw new Error('managed prompt resolver unavailable');
+        return dependencies.managedPromptResolver(value);
+    };
+    const resolvedPrompt = await resolvePromptValue(generationConfig.prompt);
     throwIfAborted(options?.abortSignal);
     const baseProviders: AIProvider[] = [
         ...(options?.providerOverride ? [options.providerOverride] : []),
@@ -332,7 +339,7 @@ async function generateWithStreamAIUsing(
                     prompt: [
                         {
                             role: 'user',
-                            content: generationConfig.prompt,
+                            content: resolvedPrompt,
                         },
                     ],
                     maxRetries: 0,
@@ -486,7 +493,7 @@ async function generateWithStreamAIUsing(
 		                    if (capturedError) {
 		                        throw enhanceErrorWithUpstreamMessage(capturedError, {
 		                            secrets: [provider.apiKey, provider.baseUrl],
-		                            sensitiveTexts: [generationConfig.prompt],
+                            sensitiveTexts: [resolvedPrompt],
 		                        });
 		                    }
 		                    throw new Error(EMPTY_OUTPUT_ERROR_MESSAGE);
@@ -593,7 +600,7 @@ async function generateWithStreamAIUsing(
                                 capturedError ?? streamError,
                                 {
                                     secrets: [provider.apiKey, provider.baseUrl],
-                                    sensitiveTexts: [generationConfig.prompt],
+                                    sensitiveTexts: [resolvedPrompt],
                                 },
                             );
                             try {
@@ -647,7 +654,7 @@ async function generateWithStreamAIUsing(
                 // 使用工具函数增强错误信息
                 const enhancedError = enhanceErrorWithUpstreamMessage(error, {
                     secrets: [provider.apiKey, provider.baseUrl],
-                    sensitiveTexts: [generationConfig.prompt],
+                    sensitiveTexts: [resolvedPrompt],
                 });
                 lastError = markAiRetrySafety(
                     enhancedError,

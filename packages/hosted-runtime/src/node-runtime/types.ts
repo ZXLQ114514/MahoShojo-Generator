@@ -71,10 +71,17 @@ export type AiTelemetry = {
   reasoning?: AIReasoningEnvelope | null;
 };
 
+export type ManagedPromptRef = {
+  id: string;
+  variables: Readonly<Record<string, string>>;
+};
+
+export type ManagedPromptResolver = (ref: ManagedPromptRef) => Promise<string>;
+
 export interface GenerationConfig<T, I = string> {
-  systemPrompt: string;
+  systemPrompt: string | ManagedPromptRef;
   temperature?: number;
-  promptBuilder(_input: I): string;
+  promptBuilder(_input: I): string | ManagedPromptRef;
   schema: z.ZodSchema<T>;
   taskName: string;
   maxOutputTokens?: number;
@@ -84,7 +91,7 @@ export interface GenerationConfig<T, I = string> {
 }
 
 export interface RawGenerationConfig {
-  prompt: string;
+  prompt: string | ManagedPromptRef;
   temperature?: number;
   maxOutputTokens?: number;
   modelOverride?: string;
@@ -120,4 +127,5 @@ export type NodeAiRuntimeDependencies = {
   fetch?: typeof fetch;
   streamReadIdleTimeoutMs?: number;
   streamReadTotalTimeoutMs?: number;
+  managedPromptResolver?: ManagedPromptResolver;
 };

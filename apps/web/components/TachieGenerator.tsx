@@ -17,11 +17,24 @@ type ModelScopePresetSize = (typeof MODELSCOPE_SIZE_OPTIONS)[number]["value"];
 
 const DEFAULT_MODELSCOPE_SIZE: ModelScopePresetSize = "1328x1328";
 
+const XEMAPI_SIZE_OPTIONS = [
+  { value: "1024x1024", label: "正方形（1024×1024）" },
+  { value: "1536x1024", label: "横向插画（1536×1024）" },
+  { value: "1024x1536", label: "竖向立绘（1024×1536）" },
+] as const;
+
+type XemApiSize = (typeof XEMAPI_SIZE_OPTIONS)[number]["value"];
+
+const getDefaultXemApiSize = (mode?: 'tachie' | 'illustration'): XemApiSize =>
+  mode === 'illustration' ? '1536x1024' : mode === 'tachie' ? '1024x1536' : '1024x1024';
+
 const isModelScopePresetSize = (value: unknown): value is ModelScopePresetSize =>
   typeof value === "string" && MODELSCOPE_SIZE_OPTIONS.some((option) => option.value === value);
 
 interface TachieGeneratorProps {
   prompt: string;
+  /** null means the caller already resolved a domain-specific managed prompt. */
+  managedPromptId?: 'image.tachie.character-positive' | null;
   mode?: 'tachie' | 'illustration';
   workflowUuid?: string;
   templateUuid?: string;
@@ -34,6 +47,7 @@ interface TachieGeneratorProps {
 
 export default function TachieGenerator({
   prompt,
+  managedPromptId = 'image.tachie.character-positive',
   mode,
   workflowUuid,
   templateUuid,
@@ -49,6 +63,9 @@ export default function TachieGenerator({
   const [modelscopeToken, setModelscopeToken] = useState("");
   const [modelscopeModel, setModelscopeModel] = useState("Stonego/XiabanmostyleV3");
   const [modelscopeSize, setModelscopeSize] = useState<ModelScopePresetSize>(DEFAULT_MODELSCOPE_SIZE);
+  const [xemapiCredentialType, setXemapiCredentialType] = useState<"apiKey" | "licenseKey">("apiKey");
+  const [xemapiCredential, setXemapiCredential] = useState("");
+  const [xemapiSize, setXemapiSize] = useState<XemApiSize>(() => getDefaultXemApiSize(mode));
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<TachieGenerationResult | null>(null);
   const [rememberCredentials, setRememberCredentials] = useState(false);
@@ -125,13 +142,16 @@ export default function TachieGenerator({
       setSecretKey('');
       setModelscopeToken('');
       setModelscopeModel('Stonego/XiabanmostyleV3');
-      setModelscopeSize(DEFAULT_MODELSCOPE_SIZE);
+            setModelscopeSize(DEFAULT_MODELSCOPE_SIZE);
+      setXemapiCredentialType("apiKey");
+      setXemapiCredential("");
+      setXemapiSize(getDefaultXemApiSize(mode));
     }
   };
 
   const requiredCredentialsReady = source === 'liblib'
     ? Boolean(accessKey.trim() && secretKey.trim())
-    : Boolean(normalizedModelScopeToken);
+    : source === 'modelscope' ? Boolean(normalizedModelScopeToken) : Boolean(xemapiCredential.trim());
 
   const handleGenerate = async () => {
     if (source === 'liblib' && (!accessKey.trim() || !secretKey.trim())) {
@@ -154,6 +174,10 @@ export default function TachieGenerator({
       onResult?.(nextResult);
       onImageUrlChange?.(null);
       return;
+    }
+    if (source === 'xemapi' && !xemapiCredential.trim()) {
+      const nextResult = { success: false, error: "请填写 XemAPI API Key 或图片生成许可密钥" } satisfies TachieGenerationResult;
+      setResult(nextResult); onResult?.(nextResult); onImageUrlChange?.(null); return;
     }
 
     const normalizedPrompt = prompt.trim();
@@ -178,6 +202,26 @@ export default function TachieGenerator({
     setProgressStatus("正在提交生成任务...");
 
     try {
+      let effectivePrompt = normalizedPrompt;
+      if (managedPromptId) {
+        try {
+          const response = await fetch('/api/tachie/suggest-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              promptId: managedPromptId,
+              variables: { character: normalizedPrompt, style: '' },
+            }),
+          });
+          if (response.ok) {
+            const payload = (await response.json().catch(() => null)) as { prompt?: unknown } | null;
+            if (typeof payload?.prompt === 'string' && payload.prompt.trim()) effectivePrompt = payload.prompt.trim();
+          }
+        } catch {
+          // Runtime prompt lookup failure falls back to the existing local prompt.
+        }
+      }
       const generationResult = await generateTachieWithProgress({
         source,
         accessKey: accessKey.trim(),
@@ -185,7 +229,10 @@ export default function TachieGenerator({
         modelscopeToken: normalizedModelScopeToken,
         modelscopeModel: modelscopeModel.trim() || undefined,
         modelscopeSize,
-        prompt: normalizedPrompt,
+        xemapiApiKey: source === 'xemapi' && xemapiCredentialType === 'apiKey' ? xemapiCredential.trim() : undefined,
+        imageGenerationLicenseKey: source === 'xemapi' && xemapiCredentialType === 'licenseKey' ? xemapiCredential.trim() : undefined,
+        xemapiSize,
+        prompt: effectivePrompt,
         mode,
         workflowUuid,
         templateUuid,
@@ -227,6 +274,7 @@ export default function TachieGenerator({
           >
             ModelScope
           </button>
+          <button type="button" onClick={() => setSource('xemapi')} disabled={isGenerating} className={source === 'xemapi' ? 'generate-button !mb-0 !py-2 !px-4 !text-sm' : 'bg-white border border-pink-200 text-pink-600 rounded-lg px-4 py-2 text-sm font-medium hover:bg-pink-50 disabled:opacity-50'}>XemAPI 图片</button>
           <button
             type="button"
             onClick={() => setSource('liblib')}
@@ -254,7 +302,7 @@ export default function TachieGenerator({
               </a>
               &nbsp;获取 Access Key 和 Secret Key
             </>
-          ) : (
+          ) : source === 'modelscope' ? (
             <>
               &nbsp;
               <a
@@ -267,6 +315,8 @@ export default function TachieGenerator({
               </a>
               &nbsp;获取 Token
             </>
+          ) : (
+            <>请使用 XemAPI 图片生成服务</>
           )}
           <br />
           本系统代码已开源，不会存储您的凭据，请放心食用~
@@ -306,8 +356,8 @@ export default function TachieGenerator({
               />
             </div>
           </>
-        ) : (
-          <>
+          ) : source === 'modelscope' ? (
+            <>
             <div className="input-group">
               <label htmlFor="modelscopeToken" className="input-label">
                 ModelScope Token
@@ -348,7 +398,30 @@ export default function TachieGenerator({
               </select>
             </div>
           </>
-        )}
+          ) : (
+            <>
+              <div className="input-group">
+                <label className="input-label">XemAPI 凭据类型</label>
+                <select value={xemapiCredentialType} onChange={(e) => setXemapiCredentialType(e.target.value as "apiKey" | "licenseKey")} className="input-field" disabled={isGenerating}>
+                  <option value="apiKey">直接输入 API Key</option>
+                  <option value="licenseKey">输入图片生成许可密钥</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label htmlFor="xemapiSize" className="input-label">图片尺寸</label>
+                <select id="xemapiSize" value={xemapiSize} onChange={(e) => setXemapiSize(e.target.value as XemApiSize)} className="input-field" disabled={isGenerating}>
+                  {XEMAPI_SIZE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="input-group">
+                <label htmlFor="xemapiCredential" className="input-label">{xemapiCredentialType === 'apiKey' ? 'XemAPI 图片分组 API Key' : '图片生成许可密钥'}</label>
+                <input id="xemapiCredential" type="password" value={xemapiCredential} onChange={(e) => setXemapiCredential(e.target.value)} placeholder={xemapiCredentialType === 'apiKey' ? '需开通 gpt-image-2 权限，仅本次请求使用' : '输入管理员生成的许可密钥'} className="input-field" disabled={isGenerating} />
+                {xemapiCredentialType === 'apiKey' ? <p className="mt-1 text-xs text-gray-500">普通文本供应商 Key 无法调用图片接口，请使用 XemAPI 的 gpt-image 图片分组 Key。</p> : null}
+              </div>
+            </>
+          )}
       </div>
 
       {/* 记住凭据选项 */}
@@ -378,7 +451,7 @@ export default function TachieGenerator({
         disabled={isGenerating || !requiredCredentialsReady || !prompt.trim()}
         className="generate-button"
       >
-        {isGenerating ? "立绘生成中，请稍后捏 (≖ᴗ≖)✧✨" : `✨ 使用 ${source === 'liblib' ? 'LibLib' : 'ModelScope'} 生成立绘 ✨`}
+        {isGenerating ? "图片生成中，请稍后..." : `✨ 使用 ${source === 'liblib' ? 'LibLib' : source === 'modelscope' ? 'ModelScope' : 'XemAPI'} 生成图片 ✨`}
       </button>
 
       {isGenerating && (
