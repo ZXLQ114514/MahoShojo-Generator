@@ -9,7 +9,7 @@ export const IMAGE_GENERATION_ACTIONS = [
     label: '创建图片生成许可',
     resource: 'image-generation-licenses',
     capability: 'ai.write',
-      fields: fields([['maxUses', '可使用次数', 'number'], ['validForSeconds', '有效秒数', 'number'], ['keyHash', '许可哈希', 'text'], ['keyPrefix', '许可前缀', 'text']]),
+      fields: fields([['maxUses', '可使用次数', 'number'], ['validForSeconds', '有效秒数', 'number']]),
   }, z.object({
     ...commonInput,
     maxUses: positive,
