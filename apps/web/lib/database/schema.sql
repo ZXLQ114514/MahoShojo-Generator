@@ -603,6 +603,9 @@ CREATE TABLE IF NOT EXISTS battle_report_generations (
   output_preview TEXT,                   -- 输出正文预览（前后截断）
   output_has_sensitive_words BOOLEAN,    -- 是否检测到敏感词（可能仅基于预览）
   output_has_shield_words BOOLEAN,       -- 是否检测到屏蔽词（可能仅基于预览）
+  is_public BOOLEAN NOT NULL DEFAULT 0,   -- 0 = 私有, 1 = 公开
+  public_since TEXT,                      -- 首次公开时间
+  note TEXT,                              -- 用户备注
 
   extra_json TEXT,                       -- 其余扩展数据（JSON，尽量小）
 
@@ -620,6 +623,7 @@ CREATE INDEX IF NOT EXISTS idx_battle_report_generations_user_id ON battle_repor
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_winner ON battle_report_generations(winner);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_mode ON battle_report_generations(mode);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_status ON battle_report_generations(status);
+CREATE INDEX IF NOT EXISTS idx_battle_report_generations_public ON battle_report_generations(is_public, status, public_since DESC);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_generation_mode ON battle_report_generations(generation_mode);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_endpoint ON battle_report_generations(endpoint);
 CREATE INDEX IF NOT EXISTS idx_battle_report_generations_scenario_data_card_id ON battle_report_generations(scenario_data_card_id);
@@ -1128,3 +1132,48 @@ CREATE TABLE IF NOT EXISTS user_message_state (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS site_settings (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL,
+  updated_by_user_id INTEGER,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS image_generation_licenses (
+  id TEXT PRIMARY KEY NOT NULL,
+  key_hash TEXT NOT NULL,
+  key_prefix TEXT NOT NULL,
+  max_uses INTEGER NOT NULL,
+  remaining_uses INTEGER NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_by_user_id INTEGER,
+  created_by_admin_principal_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_used_at TEXT,
+  revoked_at TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS image_generation_licenses_key_hash_unique ON image_generation_licenses(key_hash);
+CREATE INDEX IF NOT EXISTS image_generation_licenses_expires_at_idx ON image_generation_licenses(expires_at);
+CREATE INDEX IF NOT EXISTS image_generation_licenses_revoked_at_idx ON image_generation_licenses(revoked_at);
+
+CREATE TABLE IF NOT EXISTS ai_prompt_versions (
+  id TEXT PRIMARY KEY NOT NULL,
+  prompt_id TEXT NOT NULL,
+  revision TEXT NOT NULL,
+  body TEXT NOT NULL,
+  action TEXT NOT NULL,
+  change_note TEXT NOT NULL,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL,
+  previous_revision TEXT,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ai_prompt_versions_prompt_revision_unique ON ai_prompt_versions(prompt_id, revision);
+CREATE INDEX IF NOT EXISTS ai_prompt_versions_prompt_created_at_idx ON ai_prompt_versions(prompt_id, created_at);
+CREATE INDEX IF NOT EXISTS ai_prompt_versions_created_by_idx ON ai_prompt_versions(created_by_user_id, created_at);
