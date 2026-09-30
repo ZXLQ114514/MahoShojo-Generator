@@ -108,4 +108,27 @@ describe('Node structured AI compatibility fallback', () => {
     expect(mocks.generateObject).toHaveBeenCalledTimes(1);
     expect(mocks.generateText).not.toHaveBeenCalled();
   });
+
+  it('structured runtime resolves managed prompt refs before provider dispatch', async () => {
+    mocks.generateObject.mockResolvedValueOnce({ object: { ok: true }, usage: {}, finishReason: 'stop' });
+    const { createNodeStructuredAiRuntime, LoadBalanceStrategy } = await import('../src/node-runtime');
+    const runtime = createNodeStructuredAiRuntime({
+      providers: [provider],
+      managedPromptResolver: async (ref) => `managed:${ref.id}:${ref.variables.name}`,
+    });
+
+    await expect(runtime.generateWithAI(
+      'input',
+      {
+        ...config,
+        systemPrompt: { id: 'prompt.system', variables: { name: 'A' } },
+        promptBuilder: () => ({ id: 'prompt.task', variables: { name: 'B' } }),
+      },
+      { loadBalanceStrategy: LoadBalanceStrategy.SEQUENTIAL },
+    )).resolves.toEqual({ ok: true });
+
+    expect(mocks.generateObject.mock.calls[0]?.[0]?.prompt).toEqual(expect.arrayContaining([
+      expect.objectContaining({ content: expect.stringContaining('managed:prompt.system:A') }),
+    ]));
+  });
 });

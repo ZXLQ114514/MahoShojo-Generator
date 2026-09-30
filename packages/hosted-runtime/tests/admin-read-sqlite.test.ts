@@ -38,6 +38,9 @@ describe('Admin reads against current SQLite schema', () => {
     for (const resource of ADMIN_RESOURCES) {
       const response = await readAdminResource(db, resource, AdminQuerySchema.parse({}));
       expect(Array.isArray(response.items), resource).toBe(true);
+      if (resource === 'ai-prompts') {
+        expect(JSON.stringify(response)).not.toContain('body');
+      }
       if (resource !== 'dashboard') await readAdminResource(db, resource, AdminQuerySchema.parse({ id: '1' }));
     }
     expect(sqlite.prepare('SELECT total_changes() AS n').get().n).toBe(before);
