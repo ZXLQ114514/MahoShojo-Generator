@@ -1,7 +1,7 @@
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
-import { getPromptDefinition, type TextPromptId } from './catalog';
+import { getPromptDefinition, type TextPromptId } from '@mahoshojo/hosted-runtime/ai-prompts/catalog';
 import { getManagedPrompt, type ManagedPrompt } from './repository';
-import { renderPromptTemplate, type PromptVariables } from './template';
+import { renderPromptTemplate, type PromptVariables } from '@mahoshojo/hosted-runtime/ai-prompts/template';
 
 export const AI_PROMPT_RUNTIME_TTL_MS = 30_000;
 

@@ -349,6 +349,21 @@
       "import": "./src/db/schema/ai-prompts.ts",
       "default": "./src/db/schema/ai-prompts.ts"
     },
+    "./ai-prompts": {
+      "types": "./src/ai-prompts/index.ts",
+      "import": "./src/ai-prompts/index.ts",
+      "default": "./src/ai-prompts/index.ts"
+    },
+    "./ai-prompts/catalog": {
+      "types": "./src/ai-prompts/catalog.ts",
+      "import": "./src/ai-prompts/catalog.ts",
+      "default": "./src/ai-prompts/catalog.ts"
+    },
+    "./ai-prompts/template": {
+      "types": "./src/ai-prompts/template.ts",
+      "import": "./src/ai-prompts/template.ts",
+      "default": "./src/ai-prompts/template.ts"
+    },
     "./admin/database": {
       "types": "./src/admin/database.ts",
       "import": "./src/admin/database.ts",

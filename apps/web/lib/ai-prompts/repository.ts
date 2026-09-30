@@ -1,8 +1,8 @@
 import { randomUUID } from '@/lib/crypto';
 import type { AppDrizzleDb } from '@/lib/db/drizzle';
 import { sha256Hex } from '@/lib/pvp/crypto';
-import { getPromptDefinition, listPromptDefinitions, type PromptDefinition } from './catalog';
-import { promptByteLength, validatePromptTemplate } from './template';
+import { getPromptDefinition, listPromptDefinitions, type PromptDefinition } from '@mahoshojo/hosted-runtime/ai-prompts/catalog';
+import { promptByteLength, validatePromptTemplate } from '@mahoshojo/hosted-runtime/ai-prompts/template';
 
 export const AI_PROMPT_SETTING_PREFIX = 'ai_text_prompt_v1:';
 export const AI_PROMPT_VALUE_VERSION = 1;

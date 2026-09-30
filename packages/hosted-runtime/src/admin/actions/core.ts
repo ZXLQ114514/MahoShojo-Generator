@@ -33,6 +33,7 @@ export const ADMIN_ACTION_VERSIONS = {
   users: { table: 'users', key: 'id', columns: ['id', 'is_banned', 'is_review_exempt', 'slot_count', 'prefix', 'updated_at'] },
   badges: { table: 'badges', key: 'id', columns: ['id', 'name', 'description', 'icon', 'text_color', 'background_color', 'border_color', 'rarity', 'sort_order', 'is_active', 'created_at'] },
   'redemption-codes': { table: 'redemption_codes', key: 'rowid', columns: ['rowid', 'code', 'slot_count', 'created_at'] },
+  'ai-prompts': { table: 'site_settings', key: 'key', columns: ['key', 'value', 'updated_by_user_id', 'updated_at'] },
 } as const;
 export type AdminVersionResource = keyof typeof ADMIN_ACTION_VERSIONS;
 export async function adminActionVersion(resource: AdminVersionResource, row: Record<string, unknown>): Promise<string> {

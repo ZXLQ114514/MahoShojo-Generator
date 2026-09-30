@@ -58,6 +58,12 @@ export function fieldValue(action: Action, field: ActionField, selected: Row | n
   if (field.name === 'ids' && action.name === 'jobs.export') return row?.exportIds ?? (row?.id !== undefined ? [String(row.id)] : undefined);
   if (field.name === 'target' && action.name === 'jobs.export') return action.resource;
   if (field.name === 'visibility') return row?.is_public;
+  if (field.name === 'bodyText' && action.name === 'ai-prompts.save') {
+    try {
+      const value = typeof row?.value === 'string' ? JSON.parse(row.value) as { body?: unknown } : null;
+      return typeof value?.body === 'string' ? value.body : '';
+    } catch { return ''; }
+  }
   const value = row?.[field.name] ?? row?.[aliases[field.name]];
   if (field.type === 'boolean' && value !== undefined && value !== null) return value === true || value === 1;
   if (field.type === 'json' && value !== undefined) return parseJson(value);
