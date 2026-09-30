@@ -16,7 +16,7 @@ afterEach(() => opened.splice(0).forEach((db) => db.close()));
 function setup() {
   const sqlite = new DatabaseSync(':memory:');
   opened.push(sqlite);
-  for (const path of ['../../../apps/web/lib/database/schema.sql', '../../../drizzle/0000_auth_domain_bootstrap.sql', '../../../drizzle/0013_ai_channel_availability.sql', '../../../drizzle/0018_public_battle_reports_and_site_settings.sql', '../../../drizzle/0020_ai_prompt_versions.sql']) {
+  for (const path of ['../../../apps/web/lib/database/schema.sql', '../../../drizzle/0000_auth_domain_bootstrap.sql', '../../../drizzle/0013_ai_channel_availability.sql', '../../../drizzle/0018_public_battle_reports_and_site_settings.sql', '../../../drizzle/0019_image_generation_licenses.sql', '../../../drizzle/0020_ai_prompt_versions.sql', '../../../drizzle/0021_image_generation_license_admin_owner.sql']) {
     sqlite.exec(readFileSync(new URL(path, import.meta.url), 'utf8'));
   }
   sqlite.exec("INSERT INTO users (id, username, email, auth_key) VALUES (1, 'one', 'private@example.com', 'secret'), (2, 'two', 'private2@example.com', 'secret2')");

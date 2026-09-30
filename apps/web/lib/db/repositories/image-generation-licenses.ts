@@ -9,7 +9,8 @@ export type CreateImageGenerationLicenseInput = {
   keyPrefix: string;
   maxUses: number;
   expiresAt: string;
-  createdByUserId: number;
+  createdByUserId?: number | null;
+  createdByAdminPrincipalId?: string | null;
   now?: string;
 };
 
@@ -19,7 +20,8 @@ export type ImageGenerationLicenseListItem = {
   maxUses: number;
   remainingUses: number;
   expiresAt: string;
-  createdByUserId: number;
+  createdByUserId: number | null;
+  createdByAdminPrincipalId: string | null;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;
@@ -41,7 +43,8 @@ const mapLicense = (row: typeof imageGenerationLicenses.$inferSelect): ImageGene
   maxUses: row.maxUses,
   remainingUses: row.remainingUses,
   expiresAt: row.expiresAt,
-  createdByUserId: row.createdByUserId,
+  createdByUserId: row.createdByUserId ?? null,
+  createdByAdminPrincipalId: row.createdByAdminPrincipalId ?? null,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   lastUsedAt: row.lastUsedAt ?? null,
@@ -54,9 +57,12 @@ export const createImageGenerationLicense = async (
 ): Promise<ImageGenerationLicenseListItem> => {
   const maxUses = normalizePositiveInteger(input.maxUses);
   const expiresAt = normalizeIso(input.expiresAt);
-  const createdByUserId = normalizePositiveInteger(input.createdByUserId);
+  const createdByUserId = input.createdByUserId == null ? null : normalizePositiveInteger(input.createdByUserId);
+  const createdByAdminPrincipalId = typeof input.createdByAdminPrincipalId === 'string' && input.createdByAdminPrincipalId.trim()
+    ? input.createdByAdminPrincipalId.trim()
+    : null;
   const now = normalizeIso(input.now ?? new Date().toISOString());
-  if (!input.keyHash.trim() || !input.keyPrefix.trim() || maxUses === null || !expiresAt || createdByUserId === null || !now) {
+  if (!input.keyHash.trim() || !input.keyPrefix.trim() || maxUses === null || !expiresAt || !now || (createdByUserId === null && !createdByAdminPrincipalId)) {
     throw new Error('图片生成许可参数无效');
   }
 
@@ -68,6 +74,7 @@ export const createImageGenerationLicense = async (
     remainingUses: maxUses,
     expiresAt,
     createdByUserId,
+    createdByAdminPrincipalId,
     createdAt: now,
     updatedAt: now,
   };

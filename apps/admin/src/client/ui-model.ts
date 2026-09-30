@@ -1,6 +1,13 @@
 export type Row = Record<string, unknown>;
 export type ActionField = { name: string; label: string; type: string; required?: boolean };
 export type Action = { name: string; label: string; resource: string; fields: ActionField[]; itemFields?: ActionField[] };
+
+export const createImageGenerationLicenseIntent = async (): Promise<{ secret: string; keyHash: string; keyPrefix: string }> => {
+  const secret = `mgl_${crypto.randomUUID().replaceAll('-', '')}`;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
+  const keyHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return { secret, keyHash, keyPrefix: secret.slice(0, 12) };
+};
 export function batchItemAction(action: Action, actions: Action[]): Action | undefined {
   if (!action.name.endsWith('.batch')) return undefined;
   const name = action.name.slice(0, -6);

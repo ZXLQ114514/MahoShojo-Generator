@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { api, fieldValue, isVersion, operationFingerprint, outcomeState, parseFields, parseJson, savedOperations, saveOperation, statusLabels, textValue, type Action, type Row, type SavedOperation } from './ui-model';
+import { api, createImageGenerationLicenseIntent, fieldValue, isVersion, operationFingerprint, outcomeState, parseFields, parseJson, savedOperations, saveOperation, statusLabels, textValue, type Action, type Row, type SavedOperation } from './ui-model';
 
 const choices = (action: string, name: string): Array<[string, string]> | undefined => {
   if (name === 'decision') return [['approved', '通过'], ['rejected', '拒绝']];
@@ -50,7 +50,12 @@ export function ActionPanel({ action, selected, principalId, baseAction, close, 
     try {
       const parsed = parseFields(formAction, new FormData(event.currentTarget));
       const { reason, ...shared } = parsed;
-      const payload = batchItems && baseAction ? { items: batchItems.map(item => ({ ...item, ...shared })), reason } : parsed;
+      const licenseIntent = action.name === 'image-generation-licenses.create' ? await createImageGenerationLicenseIntent() : null;
+      const payload = batchItems && baseAction
+        ? { items: batchItems.map(item => ({ ...item, ...shared })), reason }
+        : licenseIntent
+          ? { ...parsed, keyHash: licenseIntent.keyHash, keyPrefix: licenseIntent.keyPrefix, __oneTimeSecret: licenseIntent.secret }
+          : parsed;
       if (requiredVersionMissing) throw new Error('请先读取目标详情，获取当前版本。');
       setConfirmation(payload);
     } catch (e) { setError(e instanceof Error ? e.message : '表单无效'); }
@@ -59,7 +64,9 @@ export function ActionPanel({ action, selected, principalId, baseAction, close, 
     if (sending.current) return;
     sending.current = true; setPending(true); setError('');
     try {
-      const fingerprint = await operationFingerprint(action.name, payload);
+      const safePayload = Object.fromEntries(Object.entries(payload).filter(([key]) => key !== '__oneTimeSecret'));
+      const oneTimeSecret = typeof payload.__oneTimeSecret === 'string' ? payload.__oneTimeSecret : null;
+      const fingerprint = await operationFingerprint(action.name, safePayload);
       const prior = savedOperations(principalId).find(item => item.fingerprint === fingerprint);
       if (prior && !fresh) {
         setRecord(prior); setState(prior.state); setError('相同操作已有提交记录。请查询下方状态，避免重复执行。'); return;
@@ -67,9 +74,9 @@ export function ActionPanel({ action, selected, principalId, baseAction, close, 
       const entry: SavedOperation = { key: crypto.randomUUID(), fingerprint, action: action.name, label: action.label, createdAt: new Date().toISOString(), state: 'unknown' };
       // Persist only non-sensitive recovery metadata before sending. Storage failure prevents dispatch.
       saveOperation(principalId, entry); setRecord(entry); setState('pending'); setResult(undefined);
-      const outcome = await api('actions/' + action.name, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mahoshojo-Admin-CSRF': '1' }, body: JSON.stringify({ ...payload, idempotencyKey: entry.key }) });
+      const outcome = await api('actions/' + action.name, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mahoshojo-Admin-CSRF': '1' }, body: JSON.stringify({ ...safePayload, keyPrefix: payload.keyPrefix, keyHash: payload.keyHash, idempotencyKey: entry.key }) });
       const nextState = outcomeState(outcome);
-      const updated = { ...entry, state: nextState }; saveOperation(principalId, updated); setRecord(updated); setResult(outcome); setState(nextState);
+      const updated = { ...entry, state: nextState }; saveOperation(principalId, updated); setRecord(updated); setResult(oneTimeSecret && nextState === 'succeeded' ? { ...outcome, oneTimeLicenseKey: oneTimeSecret } : outcome); setState(nextState);
       setConfirmation(null);
       if (nextState !== 'preview') applied();
       if (outcome.dryRun && outcome.targets) setPreview(outcome);
@@ -119,7 +126,7 @@ export function ActionPanel({ action, selected, principalId, baseAction, close, 
       <label>操作理由 *<textarea name="reason" required maxLength={1000} /></label>
       <button disabled={pending || requiredVersionMissing || (action.name === 'jobs.cleanup' && !preview) || (action.name === 'cards.tags' && !scopedTags) || (action.name === 'ai-availability.refresh-snapshot' && !snapshotLoaded)}>核对操作</button>
     </form>
-    {confirmation && <section className="confirmation" aria-label="确认操作"><h3>确认「{action.label}」</h3><p>请核对目标、修改值与理由。版本信息由服务器校验，冲突时不会覆盖。</p><dl>{Object.entries(confirmation).filter(([key]) => !isVersion(key)).map(([key, value]) => <div key={key}><dt>{key === 'items' ? '逐项目标与修改值' : action.fields.find(field => field.name === key)?.label ?? '操作理由'}</dt><dd>{textValue(Array.isArray(value) ? value.map(item => typeof item === 'object' && item ? Object.fromEntries(Object.entries(item).filter(([key]) => !isVersion(key))) : item) : value)}</dd></div>)}</dl><button disabled={pending} onClick={() => void dispatch(confirmation)}>{pending ? '正在提交…' : '确认执行'}</button> <button className="quiet" disabled={pending} onClick={() => setConfirmation(null)}>返回修改</button>
+     {confirmation && <section className="confirmation" aria-label="确认操作"><h3>确认「{action.label}」</h3><p>请核对目标、修改值与理由。版本信息由服务器校验，冲突时不会覆盖。</p><dl>{Object.entries(confirmation).filter(([key]) => !isVersion(key) && !['__oneTimeSecret', 'keyHash'].includes(key)).map(([key, value]) => <div key={key}><dt>{key === 'items' ? '逐项目标与修改值' : action.fields.find(field => field.name === key)?.label ?? '操作理由'}</dt><dd>{textValue(Array.isArray(value) ? value.map(item => typeof item === 'object' && item ? Object.fromEntries(Object.entries(item).filter(([key]) => !isVersion(key))) : item) : value)}</dd></div>)}</dl><button disabled={pending} onClick={() => void dispatch(confirmation)}>{pending ? '正在提交…' : '确认执行'}</button> <button className="quiet" disabled={pending} onClick={() => setConfirmation(null)}>返回修改</button>
       {record && ['succeeded', 'preview'].includes(record.state) && <button className="quiet" disabled={pending} onClick={() => { if (confirm('已确认上次操作完成。是否将相同内容作为新的独立操作执行？')) void dispatch(confirmation, true); }}>作为新的独立操作执行</button>}
     </section>}
     {error && <p role="alert" className="notice error">{error}</p>}
