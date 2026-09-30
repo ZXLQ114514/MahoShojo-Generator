@@ -76,7 +76,7 @@ export type ManagedPromptRef = {
   variables: Readonly<Record<string, string>>;
 };
 
-export type ManagedPromptResolver = (ref: ManagedPromptRef) => Promise<string>;
+export type ManagedPromptResolver = (_ref: ManagedPromptRef) => Promise<string>;
 
 export interface GenerationConfig<T, I = string> {
   systemPrompt: string | ManagedPromptRef;
