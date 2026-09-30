@@ -11,6 +11,20 @@
 ### 调整
 
 - **多人房间容量提升**：单个竞技场多人房间最多支持 32 人（含房主），房间目录、邀请信息与服务端容量门禁统一使用同一上限。
+- **运行时与数据边界收口**：Hosted 生成运行时、协议、领域逻辑与 Admin 业务核心按 `apps/*` / `packages/*` 独立边界组织；Web 保留显式 DR adapter，Hono API 作为主执行面。
+- **Prompt 管理边界收口**：canonical AI prompt catalog/template 下沉到 `@mahoshojo/hosted-runtime`，Web 只保留兼容出口；已接入 managed prompt resolver 的生成路径不再依赖 Web 内部实现。
+
+### 新增
+
+- **本地开发运行时**：新增 PostgreSQL 兼容的本地 D1 client、本地对象存储和 `dev:local` 启动路径；不改变 Cloudflare production 默认运行模式。
+- **公开战报与角色分析**：新增公开战报列表、统计/摘要、战报发布控制和角色战报分析接口与页面，继续按用户鉴权和公开字段投影读取。
+- **Tachie XemAPI 图片生成链路**：支持服务端 API Key 与一次性图片许可两种模式；LibLib/ModelScope 原有路径保持不变，许可只保存 hash、prefix 和使用元数据。
+- **独立 Admin Worker**：新增 Cloudflare Access JWT、D1 principal/capability、CAS、幂等、原子审计和持久作业边界；AI prompt 只读/受控写入及 image-generation-license 创建/撤销已完成本地纵切。
+
+### 安全
+
+- **Admin 写能力默认关闭**：`ADMIN_ENABLED_ACTIONS` 不默认启用 prompt 写入或图片许可创建/撤销；生产首发仍应先进行只读验收，再按 capability 逐项开放。
+- **一次性图片许可不落明文**：许可 secret 在浏览器本次操作内生成并展示，数据库、operation result、审计和日志不保存明文。
 
 ## [0.9.0] - 2026-09-03
 
