@@ -50,7 +50,7 @@ esac
 case "$hosted_api_environment" in
   production)
     [ "$root_dir" = '/opt/mahoshojo-hono' ] \
-      && [ "$public_base_url" = 'https://homura.colanns.me' ] \
+      && [ "$public_base_url" = 'https://maho.archine-database.top' ] \
       && [ -z "$redis_key_prefix" ] || {
       echo 'production target 路径、origin 或 Redis prefix 非法' >&2
       exit 2

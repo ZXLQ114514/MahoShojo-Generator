@@ -5,7 +5,7 @@ homura-admin.colanns.me {
 	reverse_proxy 127.0.0.1:3552
 }
 
-homura.colanns.me {
+maho.archine-database.top {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:8080
 }

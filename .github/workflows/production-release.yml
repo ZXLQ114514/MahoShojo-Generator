@@ -100,7 +100,7 @@ jobs:
           release_dir="/opt/mahoshojo-hono/releases/$release_id"
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 "$VPS_USER@$VPS_HOST" \
-            "chmod 755 '$release_dir/deploy-bundle.sh' && HONO_HOSTED_API_ENVIRONMENT=production '$release_dir/deploy-bundle.sh' publish '$release_id' https://homura.colanns.me"
+             "chmod 755 '$release_dir/deploy-bundle.sh' && HONO_HOSTED_API_ENVIRONMENT=production '$release_dir/deploy-bundle.sh' publish '$release_id' https://maho.archine-database.top"
 
 
   deploy-web:
@@ -161,4 +161,4 @@ jobs:
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 3 --retry-connrefused \
             --connect-timeout 5 --max-time 15 \
-            https://homura.colanns.me/api/health/ready >/dev/null
+             https://maho.archine-database.top/api/health/ready >/dev/null
