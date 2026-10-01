@@ -45,13 +45,15 @@ export const createAdminWorker = ({ createAccessVerifier = createAccessJwtVerifi
  return {
   async queue(batch:{messages:{body:unknown;ack():void;retry():void}[]},env:AdminRuntimeBindings){
    for(const message of batch.messages){try{if(typeof message.body==='object'&&message.body!==null&&'id' in message.body&&typeof message.body.id==='string')await jobStep(env,message.body.id,providerFetch);message.ack();}catch{message.retry();}}
-  },
-  async scheduled(_event:unknown,env:AdminRuntimeBindings){
-    await expireAdminArtifacts(env.DB,storage(env));
-    const now = new Date().toISOString();
-    await env.DB.prepare("UPDATE registration_code_claims SET status='expired',updated_at=? WHERE id IN (SELECT id FROM registration_code_claims WHERE status='claimed' AND expires_at<=? ORDER BY expires_at LIMIT 100)").bind(now, now).run();
+   },
+   async scheduled(_event:unknown,env:AdminRuntimeBindings){
+    const enabled=parseEnabledActions(env.ADMIN_ENABLED_ACTIONS);
+     await expireAdminArtifacts(env.DB,storage(env));
+    if (typeof (env.DB as unknown as { prepare?: unknown }).prepare === 'function') {
+      const now = new Date().toISOString();
+      await env.DB.prepare("UPDATE registration_code_claims SET status='expired',updated_at=? WHERE id IN (SELECT id FROM registration_code_claims WHERE status='claimed' AND expires_at<=? ORDER BY expires_at LIMIT 100)").bind(now, now).run();
+    }
    for(const job of await scanAdminJobs(env.DB))await env.ADMIN_QUEUE.send({id:job.id});
-   const enabled=parseEnabledActions(env.ADMIN_ENABLED_ACTIONS);
    if(enabled.includes('analytics.snapshot'))await runScheduledAdminAnalyticsSnapshot(env.DB,env.ADMIN_ANALYTICS_PRINCIPAL_ID);
   },
   async fetch(request:Request,env:AdminRuntimeBindings):Promise<Response>{
