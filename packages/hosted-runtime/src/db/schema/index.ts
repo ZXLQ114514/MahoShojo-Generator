@@ -4,3 +4,4 @@ export * from './ai-availability';
 export * from './admin';
 export * from './image-generation';
 export * from './ai-prompts';
+export * from './registration-codes';

@@ -34,6 +34,11 @@
       "import": "./src/node-runtime/index.ts",
       "default": "./src/node-runtime/index.ts"
     },
+    "./registration-codes": {
+      "types": "./src/registration-codes.ts",
+      "import": "./src/registration-codes.ts",
+      "default": "./src/registration-codes.ts"
+    },
     "./node-runtime/default-services": {
       "types": "./src/node-runtime/default-services.ts",
       "import": "./src/node-runtime/default-services.ts",

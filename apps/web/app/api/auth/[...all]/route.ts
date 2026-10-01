@@ -1,5 +1,6 @@
 import { getBetterAuthBootstrapStatus } from '@/lib/auth/better-auth';
 import { getBetterAuthRouteHandlers, hasBetterAuthDatabaseBinding } from '@/lib/auth/better-auth-app';
+import { verifyInternalAuthHeader } from '@/lib/auth/internal-auth';
 
 const json = (payload: unknown, status = 200): Response =>
   new Response(JSON.stringify(payload), {
@@ -32,6 +33,9 @@ const notReady = (): Response => {
 };
 
 const handle = async (req: Request): Promise<Response> => {
+  if (new URL(req.url).pathname === '/api/auth/sign-up/email' && !(await verifyInternalAuthHeader(req))) {
+    return json({ error: '公开注册必须通过注册码注册入口', code: 'REGISTRATION_CODE_REQUIRED' }, 403);
+  }
   const handlers = getBetterAuthRouteHandlers();
   if (!handlers) {
     return notReady();

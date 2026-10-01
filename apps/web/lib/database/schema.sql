@@ -470,6 +470,35 @@ CREATE TABLE IF NOT EXISTS redemption_codes (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 注册码（只保存 hash；claim 用于注册过程中的短时占用与失败释放）
+CREATE TABLE IF NOT EXISTS registration_codes (
+  id TEXT PRIMARY KEY NOT NULL,
+  code_hash TEXT NOT NULL,
+  code_prefix TEXT NOT NULL,
+  max_uses INTEGER NOT NULL,
+  used_count INTEGER NOT NULL DEFAULT 0,
+  claimed_count INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT,
+  created_by_admin_principal_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS registration_codes_code_hash_unique ON registration_codes(code_hash);
+CREATE INDEX IF NOT EXISTS registration_codes_expires_at_idx ON registration_codes(expires_at);
+CREATE INDEX IF NOT EXISTS registration_codes_revoked_at_idx ON registration_codes(revoked_at);
+
+CREATE TABLE IF NOT EXISTS registration_code_claims (
+  id TEXT PRIMARY KEY NOT NULL,
+  code_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS registration_code_claims_code_status_idx
+  ON registration_code_claims(code_id, status, expires_at);
+
 -- 徽章定义表
 CREATE TABLE IF NOT EXISTS badges (
   id TEXT PRIMARY KEY NOT NULL,              -- 徽章唯一ID（如：founder, beta_tester）

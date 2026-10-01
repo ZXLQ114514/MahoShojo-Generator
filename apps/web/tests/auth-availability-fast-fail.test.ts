@@ -35,6 +35,10 @@ describe('auth 快速失败预检', () => {
           message: 'unexpected call',
         };
       },
+      consumeRegistrationCode: async () => ({ claimId: 'claim', codeId: 'code' }),
+      finalizeRegistrationCodeClaim: async () => true,
+      releaseRegistrationCodeClaim: async () => true,
+      startRegistrationCodeDispatch: async () => true,
     });
 
     const response = await post(
@@ -43,6 +47,7 @@ describe('auth 快速失败预检', () => {
         email: 'hikari@example.com',
         password: 'password-123',
         turnstileToken: 'turnstile-ok',
+        registrationCode: 'REG-TEST1234',
       }),
     );
 

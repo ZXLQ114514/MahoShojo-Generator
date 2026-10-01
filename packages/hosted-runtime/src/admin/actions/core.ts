@@ -35,6 +35,7 @@ export const ADMIN_ACTION_VERSIONS = {
   'redemption-codes': { table: 'redemption_codes', key: 'rowid', columns: ['rowid', 'code', 'slot_count', 'created_at'] },
   'ai-prompts': { table: 'site_settings', key: 'key', columns: ['key', 'value', 'updated_by_user_id', 'updated_at'] },
   'image-generation-licenses': { table: 'image_generation_licenses', key: 'id', columns: ['id', 'key_prefix', 'max_uses', 'remaining_uses', 'expires_at', 'created_by_user_id', 'created_by_admin_principal_id', 'created_at', 'updated_at', 'last_used_at', 'revoked_at'] },
+  'registration-codes': { table: 'registration_codes', key: 'id', columns: ['id', 'code_prefix', 'max_uses', 'used_count', 'claimed_count', 'expires_at', 'created_by_admin_principal_id', 'created_at', 'updated_at', 'revoked_at'] },
 } as const;
 export type AdminVersionResource = keyof typeof ADMIN_ACTION_VERSIONS;
 export async function adminActionVersion(resource: AdminVersionResource, row: Record<string, unknown>): Promise<string> {

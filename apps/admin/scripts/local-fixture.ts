@@ -14,10 +14,10 @@ export const FIXTURE_IDENTITY = { issuer: 'https://fixture.cloudflareaccess.inva
 // These baseline scripts together describe the current business schema. This is a fresh local fixture, not a migration runner.
 const schemaFiles = ['apps/web/lib/database/schema.sql', 'drizzle/0000_auth_domain_bootstrap.sql',
   'drizzle/0013_ai_channel_availability.sql', 'drizzle/0014_admin_foundation.sql', 'drizzle/0015_admin_actor_attribution.sql'];
-const additionalMigrations = ['drizzle/0016_admin_object_tombstones.sql'];
+const additionalMigrations = ['drizzle/0016_admin_object_tombstones.sql', 'drizzle/0022_registration_codes.sql'];
 const fixtureIdentity = (writers: boolean, review = false) => ({...FIXTURE_IDENTITY, subject: review ? 'synthetic-admin-reviewer' : writers ? 'synthetic-admin-writer' : FIXTURE_IDENTITY.subject});
 const fixturePrincipalId = (writers: boolean, review = false) => review ? 'local-fixture-reviewer' : writers ? 'local-fixture-writer' : 'local-fixture-admin';
-export const LOCAL_WRITER_ACTIONS = REGISTERED_ACTIONS.filter(action => ['content.write','tags.write','messages.write'].includes(action.capability) && action.name !== 'cards.metrics');
+export const LOCAL_WRITER_ACTIONS = REGISTERED_ACTIONS.filter(action => ['content.write','tags.write','messages.write','registration.write'].includes(action.capability) && action.name !== 'cards.metrics');
 const REVIEW_ACTION_NAMES = ['ai.review', 'jobs.export', 'cards.review', 'card-updates.review'];
 const fixtureActions = (writers: boolean, review: boolean) => REGISTERED_ACTIONS.filter(action =>
   (writers && LOCAL_WRITER_ACTIONS.includes(action)) || (review && REVIEW_ACTION_NAMES.includes(action.name)));

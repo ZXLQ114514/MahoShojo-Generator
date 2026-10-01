@@ -362,7 +362,7 @@ const fetchDataCardsDetailed = async (
 // API 请求工具函数
 export const authApi = {
   // 注册
-  async register(username: string, email: string, turnstileToken: string, password: string): Promise<{
+  async register(username: string, email: string, turnstileToken: string, password: string, registrationCode: string): Promise<{
     success: boolean;
     authKey?: string;
     authMode?: 'better-auth' | 'legacy';
@@ -375,7 +375,7 @@ export const authApi = {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password, turnstileToken })
+        body: JSON.stringify({ username, email, password, turnstileToken, registrationCode })
       });
 
       const data = await response.json();

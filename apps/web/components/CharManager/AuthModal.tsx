@@ -19,7 +19,7 @@ interface AuthModalProps {
     turnstileToken: string,
     mode: 'password' | 'legacy',
   ) => Promise<{ requiresTurnstile?: boolean } | void>;
-  onRegister: (username: string, email: string, turnstileToken: string, password: string) => Promise<void>;
+  onRegister: (username: string, email: string, turnstileToken: string, password: string, registrationCode: string) => Promise<void>;
   authMessage: { type: 'error' | 'success'; text: string } | null;
 }
 
@@ -31,6 +31,7 @@ type AuthFormState = {
   authKey: string;
   password: string;
   confirmPassword: string;
+  registrationCode: string;
 };
 
 const EMPTY_FORM: AuthFormState = {
@@ -39,6 +40,7 @@ const EMPTY_FORM: AuthFormState = {
   authKey: '',
   password: '',
   confirmPassword: '',
+  registrationCode: '',
 };
 
 const getStrengthBarClassName = (score: number): string => {
@@ -197,7 +199,7 @@ export default function AuthModal({
     setIsSubmitting(true);
     try {
       if (authMode === 'register') {
-        await onRegister(authForm.username.trim(), authForm.identifier.trim(), turnstileToken, authForm.password);
+        await onRegister(authForm.username.trim(), authForm.identifier.trim(), turnstileToken, authForm.password, authForm.registrationCode.trim());
         return;
       }
 
@@ -237,7 +239,7 @@ export default function AuthModal({
   const canSubmit =
     (!shouldShowTurnstile || Boolean(turnstileToken)) &&
     !isSubmitting &&
-    !(authMode === 'register' && (!authForm.password || Boolean(usernameError) || Boolean(identifierError) || Boolean(passwordError))) &&
+    !(authMode === 'register' && (!authForm.password || !authForm.registrationCode.trim() || Boolean(usernameError) || Boolean(identifierError) || Boolean(passwordError))) &&
     !(authMode === 'login' && loginMethod === 'password' && !authForm.identifier.trim());
 
   return (
@@ -335,6 +337,22 @@ export default function AuthModal({
                 required
               />
               {identifierError ? <p className="mt-1 text-sm text-red-600">{identifierError}</p> : null}
+            </div>
+          ) : null}
+
+          {authMode === 'register' ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">注册码</label>
+              <input
+                type="text"
+                value={authForm.registrationCode}
+                onChange={(e) => setAuthForm((prev) => ({ ...prev, registrationCode: e.target.value.toUpperCase() }))}
+                className="input-field"
+                placeholder="请输入管理员发放的注册码"
+                autoComplete="off"
+                required
+              />
+              <p className="mt-1 text-xs text-gray-500">注册码由管理员发放，每个注册码只能按授权次数使用。</p>
             </div>
           ) : null}
 

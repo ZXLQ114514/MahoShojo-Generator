@@ -42,6 +42,10 @@ describe('auth handlers rate limit short circuit', () => {
           message: 'should not run',
         };
       },
+      consumeRegistrationCode: async () => ({ claimId: 'claim', codeId: 'code' }),
+      finalizeRegistrationCodeClaim: async () => true,
+      releaseRegistrationCodeClaim: async () => true,
+      startRegistrationCodeDispatch: async () => true,
     });
 
     const response = await post(
@@ -50,6 +54,7 @@ describe('auth handlers rate limit short circuit', () => {
         email: 'hikari@example.com',
         password: 'password-123',
         turnstileToken: 'turnstile-ok',
+        registrationCode: 'REG-TEST1234',
       }),
     );
 

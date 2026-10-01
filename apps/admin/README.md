@@ -32,7 +32,7 @@ D1/R2 状态保存在 `apps/admin/.wrangler/state/v3`。初始化只接受空库
 node apps/admin/scripts/local.mjs serve --writers
 ```
 
-该模式使用独立合成 writer principal，只启用内容、标签和消息操作；不启用 AI 调用、清理、导出或真实外部资源。停止服务后，重新登录会使用新的一小时 JWT。撤权 fixture 要验证恢复时，使用新的隔离测试状态，不以初始化撤销禁用记录。
+该模式使用独立合成 writer principal，只启用内容、标签、消息和本地注册码操作；不启用 AI 调用、清理、导出或真实外部资源。停止服务后，重新登录会使用新的一小时 JWT。撤权 fixture 要验证恢复时，使用新的隔离测试状态，不以初始化撤销禁用记录。
 
 需要验收 AI 审核与导出闭环时，使用 `node apps/admin/scripts/local.mjs serve --review-fixture`（可叠加 `--writers`）。该模式使用独立合成审核主体、预设系统模型和固定本地 Provider 响应；BYOK 可填 `synthetic-byok-local`，不访问任何外部模型地址。`fixture-card-1` 建议通过，`fixture-card-reject` 建议拒绝。每个本地请求结束后最多推进 20 步正式 Queue 消费，以验证建议、人工裁决和私有导出下载。生产 bundle 不包含该 fixture。
 

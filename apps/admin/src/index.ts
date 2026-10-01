@@ -33,7 +33,7 @@ async function jobStep(env:AdminRuntimeBindings,id:string,providerFetch?:typeof 
 }
 export const ADMIN_CAPABILITIES = [...new Set(['admin.shell.read','admin.principals.manage',...Object.values(READ_CAPABILITIES),
  'content.write','tags.write','users.write','badges.write','redemption.write','messages.write','moderation.write',
- 'analytics.write','ai.write','ai.review','ratings.write','pvp.write','storage.write','exports.read','data.maintenance','audit.read','arena.observe',...ACTION_CAPABILITIES])];
+  'analytics.write','ai.write','ai.review','registration.write','ratings.write','pvp.write','storage.write','exports.read','data.maintenance','audit.read','arena.observe',...ACTION_CAPABILITIES])];
 const configError = (): Response => {
  const response=Response.json({error:'ADMIN_CONFIGURATION_INVALID'},{status:503});setAdminSecurityHeaders(response.headers);return response;
 };
@@ -47,7 +47,9 @@ export const createAdminWorker = ({ createAccessVerifier = createAccessJwtVerifi
    for(const message of batch.messages){try{if(typeof message.body==='object'&&message.body!==null&&'id' in message.body&&typeof message.body.id==='string')await jobStep(env,message.body.id,providerFetch);message.ack();}catch{message.retry();}}
   },
   async scheduled(_event:unknown,env:AdminRuntimeBindings){
-   await expireAdminArtifacts(env.DB,storage(env));
+    await expireAdminArtifacts(env.DB,storage(env));
+    const now = new Date().toISOString();
+    await env.DB.prepare("UPDATE registration_code_claims SET status='expired',updated_at=? WHERE id IN (SELECT id FROM registration_code_claims WHERE status='claimed' AND expires_at<=? ORDER BY expires_at LIMIT 100)").bind(now, now).run();
    for(const job of await scanAdminJobs(env.DB))await env.ADMIN_QUEUE.send({id:job.id});
    const enabled=parseEnabledActions(env.ADMIN_ENABLED_ACTIONS);
    if(enabled.includes('analytics.snapshot'))await runScheduledAdminAnalyticsSnapshot(env.DB,env.ADMIN_ANALYTICS_PRINCIPAL_ID);

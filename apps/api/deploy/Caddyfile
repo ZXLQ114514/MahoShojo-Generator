@@ -1,3 +1,5 @@
+# Preserve this existing Arcane vhost when merging the Hono site blocks into
+# the Fedora host's Caddyfile. It is unrelated to the business Admin Worker.
 homura-admin.colanns.me {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:3552

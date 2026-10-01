@@ -1,6 +1,7 @@
 import { getBetterAuthBootstrapStatus } from '@/lib/auth/better-auth';
 import { getBetterAuthInstance, hasBetterAuthDatabaseBinding } from '@/lib/auth/better-auth-app';
 import { appendSetCookieHeaders } from '@/lib/auth/set-cookie';
+import { buildInternalAuthHeader, INTERNAL_AUTH_HEADER } from '@/lib/auth/internal-auth';
 
 export type BetterAuthBridgeUnavailableCode =
   | 'BETTER_AUTH_MISCONFIGURED'
@@ -9,7 +10,7 @@ export type BetterAuthBridgeUnavailableCode =
 
 export type BetterAuthBridgeResult =
   | { ok: true; response: Response }
-  | { ok: false; code: BetterAuthBridgeUnavailableCode; message: string };
+  | { ok: false; code: BetterAuthBridgeUnavailableCode; message: string; dispatched: boolean };
 
 export type BetterAuthBridgeAvailability =
   | { available: true }
@@ -40,12 +41,13 @@ export const invokeBetterAuthJsonEndpoint = async (input: {
       ok: false,
       code: availability.code,
       message: availability.message,
+      dispatched: false,
     };
   }
 
   const auth = getBetterAuthInstance();
   if (!auth) {
-    return { ok: false, code: 'BETTER_AUTH_INIT_FAILED', message: 'Better Auth 初始化失败' };
+    return { ok: false, code: 'BETTER_AUTH_INIT_FAILED', message: 'Better Auth 初始化失败', dispatched: false };
   }
 
   const normalizedPath = input.path.startsWith('/') ? input.path : `/${input.path}`;
@@ -54,6 +56,9 @@ export const invokeBetterAuthJsonEndpoint = async (input: {
   const requestHeaders = new Headers({
     'Content-Type': 'application/json',
   });
+  const body = JSON.stringify(input.body ?? {});
+  const internalAuth = await buildInternalAuthHeader(normalizedPath, body);
+  if (internalAuth) requestHeaders.set(INTERNAL_AUTH_HEADER, internalAuth);
   copyHeader(input.sourceHeaders, requestHeaders, 'cookie');
   copyHeader(input.sourceHeaders, requestHeaders, 'origin');
   copyHeader(input.sourceHeaders, requestHeaders, 'referer');
@@ -67,17 +72,16 @@ export const invokeBetterAuthJsonEndpoint = async (input: {
       new Request(url.toString(), {
         method: 'POST',
         headers: requestHeaders,
-        body: JSON.stringify(input.body ?? {}),
+        body,
       }),
     );
 
     return { ok: true, response };
-  } catch (error) {
-    console.error('[auth][bridge] 调用 Better Auth 端点失败:', {
-      path: normalizedPath,
-      error,
-    });
-    return { ok: false, code: 'BETTER_AUTH_INIT_FAILED', message: 'Better Auth 请求执行失败' };
+  } catch {
+    // Provider/adapter errors can contain untrusted request data (including
+    // credentials). Do not log the raw error or the sign-up body here.
+    console.error('[auth][bridge] 调用 Better Auth 端点失败:', normalizedPath);
+    return { ok: false, code: 'BETTER_AUTH_INIT_FAILED', message: 'Better Auth 请求执行失败', dispatched: true };
   }
 };
 

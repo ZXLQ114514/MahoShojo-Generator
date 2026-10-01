@@ -28,12 +28,19 @@ import {
 import { getClientIpFromHeaders } from '@/lib/arena/battle-report-log-utils';
 import { quickCheck } from '@/lib/sensitive-word-filter';
 import { verifyTurnstileToken } from '@/lib/turnstile';
+import {
+  consumeRegistrationCode,
+  finalizeRegistrationCodeClaim,
+  releaseRegistrationCodeClaim,
+  startRegistrationCodeDispatch,
+} from '@/lib/auth/registration-codes';
 
 type RegisterPayload = {
   username?: string;
   email?: string;
   password?: string;
   turnstileToken?: string;
+  registrationCode?: string;
 };
 
 type BetterAuthSignUpPayload = {
@@ -86,6 +93,10 @@ type RegisterDeps = {
   setBusinessUserRegistrationIpIfEmpty: typeof setBusinessUserRegistrationIpIfEmpty;
   quickCheck: typeof quickCheck;
   verifyTurnstileToken: typeof verifyTurnstileToken;
+  consumeRegistrationCode: typeof consumeRegistrationCode;
+  finalizeRegistrationCodeClaim: typeof finalizeRegistrationCodeClaim;
+  releaseRegistrationCodeClaim: typeof releaseRegistrationCodeClaim;
+  startRegistrationCodeDispatch: typeof startRegistrationCodeDispatch;
 };
 
 const defaultRegisterDeps: RegisterDeps = {
@@ -109,6 +120,10 @@ const defaultRegisterDeps: RegisterDeps = {
   setBusinessUserRegistrationIpIfEmpty,
   quickCheck,
   verifyTurnstileToken,
+  consumeRegistrationCode,
+  finalizeRegistrationCodeClaim,
+  releaseRegistrationCodeClaim,
+  startRegistrationCodeDispatch,
 };
 
 const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Response>) => {
@@ -117,11 +132,13 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
     username: string,
     email: string,
     password: string,
+    claim: { claimId: string },
   ): Promise<Response> => {
     const db = deps.getDrizzleDbFromRuntime();
 
     const existingUserByName = db ? await deps.getBusinessUserByUsername(db, username) : await deps.getUserByUsername(username);
     if (existingUserByName) {
+      await deps.releaseRegistrationCodeClaim(claim.claimId);
       await deps.recordAuthAuditLog({
         req,
         eventType: 'register_failed',
@@ -134,6 +151,7 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
 
     const existingUserByEmail = db ? await deps.getBusinessUserByEmail(db, email) : await deps.getUserByEmail(email);
     if (existingUserByEmail) {
+      await deps.releaseRegistrationCodeClaim(claim.claimId);
       await deps.recordAuthAuditLog({
         req,
         eventType: 'register_failed',
@@ -142,6 +160,12 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
         resultCode: 'EMAIL_EXISTS',
       });
       return json({ error: '邮箱已被注册' }, 409);
+    }
+
+    if (!await deps.startRegistrationCodeDispatch(claim.claimId)) {
+      await deps.releaseRegistrationCodeClaim(claim.claimId);
+      await deps.recordAuthAuditLog({ req, eventType: 'register_failed', authSource: 'better-auth', resultCode: 'REGISTRATION_CODE_CLAIM_EXPIRED' });
+      return json({ error: '注册码占用已过期，请重新提交注册' }, 409);
     }
 
     const bridge = await deps.invokeBetterAuthJsonEndpoint({
@@ -156,6 +180,7 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
     });
 
     if (!bridge.ok) {
+      if (!bridge.dispatched) await deps.releaseRegistrationCodeClaim(claim.claimId);
       await deps.recordAuthAuditLog({
         req,
         eventType: 'register_failed',
@@ -174,6 +199,8 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
 
     const payload = await deps.readJsonSafely<BetterAuthSignUpPayload>(bridge.response);
     if (!bridge.response.ok) {
+      // Better Auth can commit a user before a later step fails (e.g. session
+      // creation). A non-2xx response does not prove this use is safe to replay.
       const mappedMessage = mapRegisterError(deps.extractErrorMessage(payload, '密码注册失败，请稍后重试'));
       await deps.recordAuthAuditLog({
         req,
@@ -190,6 +217,15 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
       );
     }
 
+    if (!await deps.finalizeRegistrationCodeClaim(claim.claimId)) {
+      await deps.recordAuthAuditLog({
+        req,
+        eventType: 'register_failed',
+        authSource: 'better-auth',
+        resultCode: 'REGISTRATION_CODE_FINALIZE_FAILED',
+      });
+      return json({ error: '注册账号已创建，但注册码状态确认失败，请联系管理员处理。' }, 503);
+    }
     const authUserId = toNonEmptyString(payload?.user?.id);
     if (!authUserId) {
       await deps.recordAuthAuditLog({
@@ -200,7 +236,6 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
       });
       return json({ error: '注册失败：未能解析会话用户标识' }, 500);
     }
-
     let businessUser = await deps.getLinkedBusinessUserByAuthUserId(authUserId);
     if (!businessUser) {
       businessUser = await deps.ensureAuthUserLink({
@@ -233,6 +268,7 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
       });
       return json({ error: '注册成功，但用户兼容凭证初始化失败，请稍后重试。' }, 500);
     }
+
 
     if (db) {
       try {
@@ -285,15 +321,16 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
       const emailInput = toNonEmptyString(payload.email);
       const password = toNonEmptyString(payload.password);
       const turnstileToken = toNonEmptyString(payload.turnstileToken);
+      const registrationCode = toNonEmptyString(payload.registrationCode);
 
-      if (!username || !emailInput || !password || !turnstileToken) {
+      if (!username || !emailInput || !password || !turnstileToken || !registrationCode) {
         await deps.recordAuthAuditLog({
           req,
           eventType: 'register_failed',
           authSource: 'better-auth',
           resultCode: 'INVALID_PAYLOAD',
         });
-        return json({ error: '用户名、邮箱、密码和安全验证不能为空' }, 400);
+        return json({ error: '用户名、邮箱、密码、注册码和安全验证不能为空' }, 400);
       }
 
       const normalizedEmail = normalizeEmail(emailInput);
@@ -408,7 +445,13 @@ const buildRegisterHandler = (deps: RegisterDeps): ((req: Request) => Promise<Re
         console.error('Sensitive word check failed:', error);
       }
 
-      return registerWithBetterAuth(req, username, normalizedEmail, password);
+      const claim = await deps.consumeRegistrationCode(registrationCode);
+      if (!claim) {
+        await deps.recordAuthAuditLog({ req, eventType: 'register_failed', authSource: 'better-auth', resultCode: 'REGISTRATION_CODE_INVALID' });
+        return json({ error: '注册码无效、已过期、已用尽或已撤销' }, 400);
+      }
+
+      return registerWithBetterAuth(req, username, normalizedEmail, password, claim);
     } catch (error) {
       console.error('Registration error:', error);
       await deps.recordAuthAuditLog({

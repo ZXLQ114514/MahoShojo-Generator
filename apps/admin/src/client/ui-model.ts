@@ -3,10 +3,26 @@ export type ActionField = { name: string; label: string; type: string; required?
 export type Action = { name: string; label: string; resource: string; fields: ActionField[]; itemFields?: ActionField[] };
 
 export const createImageGenerationLicenseIntent = async (): Promise<{ secret: string; keyHash: string; keyPrefix: string }> => {
-  const secret = `mgl_${crypto.randomUUID().replaceAll('-', '')}`;
+  const secret = `mgl_${crypto.randomUUID().replace(/-/gu, '')}`;
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
   const keyHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   return { secret, keyHash, keyPrefix: secret.slice(0, 12) };
+};
+
+export const createRegistrationCodeIntents = async (count: number): Promise<Array<{ secret: string; id: string; codeHash: string; codePrefix: string }>> => {
+  if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error('生成数量必须为 1–100。');
+  const result: Array<{ secret: string; id: string; codeHash: string; codePrefix: string }> = [];
+  for (let index = 0; index < count; index += 1) {
+    const secret = `REG-${crypto.randomUUID().replace(/-/gu, '').toUpperCase()}`;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret.replace(/-/gu, '')));
+    result.push({
+      secret,
+      id: crypto.randomUUID(),
+      codeHash: Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(''),
+      codePrefix: secret.slice(0, 12),
+    });
+  }
+  return result;
 };
 export function batchItemAction(action: Action, actions: Action[]): Action | undefined {
   if (!action.name.endsWith('.batch')) return undefined;

@@ -29,9 +29,10 @@ export function GlobalTopBar({ pathname, defaultMobileOpen = false }: GlobalTopB
     email: string,
     turnstileToken: string,
     password: string,
+    registrationCode: string,
   ) => {
     setAuthMessage(null);
-    const result = await register(username, email, turnstileToken, password);
+    const result = await register(username, email, turnstileToken, password, registrationCode);
     if (!result.success) {
       setAuthMessage({ type: 'error', text: result.error || '注册失败' });
       return;

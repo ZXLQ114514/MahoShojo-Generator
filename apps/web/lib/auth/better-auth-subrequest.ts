@@ -1,5 +1,6 @@
 import { buildSubrequestAuthHeaders } from '@/lib/subrequest-auth';
 import { resolveTrustedBetterAuthSubrequestUrl } from '@/lib/auth/trusted-better-auth-url';
+import { buildInternalAuthHeader, INTERNAL_AUTH_HEADER } from '@/lib/auth/internal-auth';
 
 type BetterAuthSubrequestInput = {
   req: Request;
@@ -20,6 +21,9 @@ export const invokeBetterAuthSubrequest = async (input: BetterAuthSubrequestInpu
   const headers = new Headers({
     'Content-Type': 'application/json',
   });
+  const body = JSON.stringify(input.body ?? {});
+  const internalAuth = await buildInternalAuthHeader(targetUrl.pathname, body);
+  if (internalAuth) headers.set(INTERNAL_AUTH_HEADER, internalAuth);
 
   const subrequestHeaders = buildSubrequestAuthHeaders(input.req);
   for (const [key, value] of Object.entries(subrequestHeaders)) {
@@ -37,7 +41,7 @@ export const invokeBetterAuthSubrequest = async (input: BetterAuthSubrequestInpu
   return fetch(targetUrl.toString(), {
     method: 'POST',
     headers,
-    body: JSON.stringify(input.body ?? {}),
+    body,
   });
 };
 

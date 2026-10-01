@@ -513,9 +513,9 @@ export const CharacterManagerPage: React.FC = () => {
     }, []);
 
     // 处理注册
-    const handleRegister = async (username: string, email: string, turnstileToken: string, password: string) => {
+    const handleRegister = async (username: string, email: string, turnstileToken: string, password: string, registrationCode: string) => {
         setAuthMessage(null);
-        const result = await register(username, email, turnstileToken, password);
+        const result = await register(username, email, turnstileToken, password, registrationCode);
         if (!result.success) {
             setAuthMessage({ type: 'error', text: result.error || '注册失败' });
             return;

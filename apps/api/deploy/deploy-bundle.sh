@@ -212,7 +212,7 @@ validate_release_config() {
     -e REDIS_KEY_PREFIX="$redis_key_prefix" \
     -e D1_REQUIRED=true \
     -e HONO_CONFIG_CHECK_ONLY=true \
-    -v "$candidate/index.mjs:/app/index.mjs:ro" \
+    -v "$candidate/index.mjs:/app/index.mjs:ro,Z" \
     "$runtime_image" node /app/index.mjs >/dev/null
 }
 

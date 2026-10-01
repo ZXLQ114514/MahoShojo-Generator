@@ -435,6 +435,10 @@ const buildAuthHarness = async () => {
       matchDetails: [],
     }),
     verifyTurnstileToken,
+    consumeRegistrationCode: async () => ({ claimId: 'claim', codeId: 'code' }),
+    finalizeRegistrationCodeClaim: async () => true,
+    releaseRegistrationCodeClaim: async () => true,
+    startRegistrationCodeDispatch: async () => true,
   });
 
   const loginPost = routes.createLoginHandler({
@@ -707,7 +711,21 @@ describe('auth 全链路集成', () => {
 
     expect(registerResp.status).toBe(400);
     const payload = (await registerResp.json()) as { error?: string };
-    expect(payload.error).toContain('用户名、邮箱、密码和安全验证不能为空');
+    expect(payload.error).toContain('用户名、邮箱、密码、注册码和安全验证不能为空');
+  });
+
+  test('register 必须提供注册码', async () => {
+    const harness = await buildAuthHarness();
+    const registerResp = await harness.registerPost(
+      postJsonRequest('https://example.com/api/auth/register', {
+        username: 'missing-code-user',
+        email: 'missing-code@example.com',
+        password: 'password-123',
+        turnstileToken: 'turnstile-ok',
+      }),
+    );
+    expect(registerResp.status).toBe(400);
+    expect((await registerResp.json() as { error?: string }).error).toContain('注册码');
   });
 
   test('recover 允许仅凭邮箱发起找回', async () => {
@@ -719,6 +737,7 @@ describe('auth 全链路集成', () => {
         email: 'email-only@example.com',
         password: 'password-123',
         turnstileToken: 'turnstile-ok',
+        registrationCode: 'REG-TEST1234',
       }),
     );
 
@@ -758,6 +777,7 @@ describe('auth 全链路集成', () => {
         email: 'hikari@example.com',
         password: 'password-123',
         turnstileToken: 'turnstile-ok',
+        registrationCode: 'REG-TEST1234',
       }),
     );
     expect(registerResp.status).toBe(200);

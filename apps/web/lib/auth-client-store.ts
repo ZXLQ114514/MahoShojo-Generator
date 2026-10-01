@@ -122,8 +122,9 @@ export const registerAndSyncAuthState = async (
   email: string,
   turnstileToken: string,
   password: string,
+  registrationCode: string,
 ) => {
-  const result = await authApi.register(username, email, turnstileToken, password);
+  const result = await authApi.register(username, email, turnstileToken, password, registrationCode);
 
   if (result.success) {
     const verifyResult = await authApi.verify();

@@ -23,7 +23,7 @@ services:
     ports:
       - "127.0.0.1:${HONO_BIND_PORT:-8080}:8787"
     volumes:
-      - "${HONO_RELEASE_DIR:?HONO_RELEASE_DIR 未配置}/index.mjs:/app/index.mjs:ro"
+      - "${HONO_RELEASE_DIR:?HONO_RELEASE_DIR 未配置}/index.mjs:/app/index.mjs:ro,Z"
     logging:
       driver: json-file
       options:
