@@ -100,7 +100,7 @@ jobs:
           release_dir="/opt/mahoshojo-hono/releases/$release_id"
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 "$VPS_USER@$VPS_HOST" \
-             "chmod 755 '$release_dir/deploy-bundle.sh' && HONO_HOSTED_API_ENVIRONMENT=production '$release_dir/deploy-bundle.sh' publish '$release_id' https://maho.archine-database.top"
+             "chmod 755 '$release_dir/deploy-bundle.sh' && HONO_CONTAINER_ENGINE=podman HONO_HOSTED_API_ENVIRONMENT=production '$release_dir/deploy-bundle.sh' publish '$release_id' https://maho.archine-database.top"
 
 
   deploy-web:

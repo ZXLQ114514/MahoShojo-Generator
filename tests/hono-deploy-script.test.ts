@@ -37,6 +37,11 @@ function writeRelease(
     'index.mjs': `console.info(${JSON.stringify(label)});\n`,
     'compose.yml': `services:\n  hono:\n    image: ${label}\n`,
     'deploy-bundle.sh': readFileSync(deployScriptPath, 'utf8'),
+    ...(label === 'previous' ? {} : {
+      'backup-local-objects.sh': '#!/bin/sh\nexit 0\n',
+      'mahoshojo-local-object-backup.service': '[Service]\nType=oneshot\n',
+      'mahoshojo-local-object-backup.timer': '[Timer]\nPersistent=true\n',
+    }),
     ...extraFiles,
   };
   const manifest = Object.entries(files)
@@ -120,7 +125,7 @@ active_id="\${active##*/}"
 printf '%s|%s\n' "$active_id" "$url" >> "$DEPLOY_TEST_CURL_LOG"
 if [ -n "\${DEPLOY_TEST_FAIL_LOCAL_RELEASE:-}" ] \
   && [ "$active_id" = "$DEPLOY_TEST_FAIL_LOCAL_RELEASE" ] \
-  && [ "$url" = "http://127.0.0.1:18080/health/ready" ]; then
+  && [ "$url" = "http://127.0.0.1:11020/health/ready" ]; then
   exit 22
 fi
 if [ -n "\${DEPLOY_TEST_FAIL_PUBLIC_RELEASE:-}" ] \
@@ -191,7 +196,8 @@ function runDeploy(
         ...process.env,
         PATH: `${fixture.binDirectory}:${process.env.PATH ?? ''}`,
         HONO_DEPLOY_ROOT_DIR: fixture.rootDirectory,
-        HONO_BIND_PORT: '18080',
+        HONO_BIND_PORT: '11020',
+        HONO_CONTAINER_ENGINE: 'docker',
         HONO_HOSTED_API_ENVIRONMENT: 'test',
         DEPLOY_TEST_ACTIVE_FILE: fixture.activeFile,
         DEPLOY_TEST_CURL_LOG: fixture.curlLog,
@@ -350,7 +356,8 @@ describe('Hono release deployment', () => {
     const baseEnvironment = {
       ...process.env,
       PATH: `${fixture.binDirectory}:${process.env.PATH ?? ''}`,
-      HONO_BIND_PORT: '18080',
+      HONO_BIND_PORT: '11020',
+      HONO_CONTAINER_ENGINE: 'docker',
       HONO_HOSTED_API_ENVIRONMENT: 'test',
       DEPLOY_TEST_ACTIVE_FILE: fixture.activeFile,
       DEPLOY_TEST_CURL_LOG: fixture.curlLog,

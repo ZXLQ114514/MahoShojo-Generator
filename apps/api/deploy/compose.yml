@@ -4,7 +4,7 @@ services:
     container_name: ${HONO_CONTAINER_NAME:-mahoshojo-hono}
     init: true
     restart: unless-stopped
-    user: node
+    user: ${HONO_CONTAINER_USER:-node}
     command: ["node", "/app/index.mjs"]
     env_file:
       - ${HONO_DEPLOY_ROOT_DIR:-/opt/mahoshojo-hono}/.env.hono
@@ -21,9 +21,11 @@ services:
       REDIS_KEY_PREFIX: ${HONO_REDIS_KEY_PREFIX:-}
       D1_REQUIRED: "true"
     ports:
-      - "127.0.0.1:${HONO_BIND_PORT:-8080}:8787"
+      - "127.0.0.1:${HONO_BIND_PORT:-11020}:8787"
     volumes:
       - "${HONO_RELEASE_DIR:?HONO_RELEASE_DIR 未配置}/index.mjs:/app/index.mjs:ro,Z"
+      - "${LOCAL_OBJECTS_HOST_DIR:-/opt/mahoshojo-hono/data/objects}:/data/objects:Z"
+      - "${LOCAL_BACKUP_HOST_DIR:-/opt/mahoshojo-hono/data/backups}:/data/backups:Z"
     logging:
       driver: json-file
       options:

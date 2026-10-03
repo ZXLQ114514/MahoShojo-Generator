@@ -25,11 +25,13 @@ case "$public_base_url" in
 esac
 
 root_dir="${HONO_DEPLOY_ROOT_DIR:-/opt/mahoshojo-hono}"
-bind_port="${HONO_BIND_PORT:-8080}"
+bind_port="${HONO_BIND_PORT:-11020}"
 redis_key_prefix="${HONO_REDIS_KEY_PREFIX:-}"
 redis_network_name="${HONO_REDIS_NETWORK_NAME:-mahoshojo-redis}"
 hosted_api_environment="${HONO_HOSTED_API_ENVIRONMENT:-}"
 container_name="${HONO_CONTAINER_NAME:-mahoshojo-hono}"
+container_engine="${HONO_CONTAINER_ENGINE:-docker}"
+container_user="${HONO_CONTAINER_USER:-}"
 runtime_image='node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32'
 web_origin='https://mahoshojo.colanns.me'
 preview_web_origin='https://maho-preview.colanns.me'
@@ -46,6 +48,38 @@ esac
 case "$container_name" in
   ''|*[!A-Za-z0-9_.-]*) echo 'HONO_CONTAINER_NAME 非法' >&2; exit 2 ;;
 esac
+case "$container_engine" in
+  docker|podman) ;;
+  *) echo 'HONO_CONTAINER_ENGINE 必须是 docker 或 podman' >&2; exit 2 ;;
+esac
+if [ -z "$container_user" ]; then
+  if [ "$container_engine" = podman ]; then
+    # Rootless Podman 的 container root 映射到部署用户，便于写入 keep-id 之外的 bind mount。
+    container_user=0
+  else
+    container_user=node
+  fi
+fi
+case "$container_user" in
+  ''|*[!A-Za-z0-9_.:-]*) echo 'HONO_CONTAINER_USER 非法' >&2; exit 2 ;;
+esac
+export HONO_CONTAINER_USER="$container_user"
+export HONO_BIND_PORT="$bind_port"
+export HONO_CONTAINER_NAME="$container_name"
+export HONO_REDIS_NETWORK_NAME="$redis_network_name"
+export HONO_REDIS_KEY_PREFIX="$redis_key_prefix"
+export HONO_HOSTED_API_ENVIRONMENT="$hosted_api_environment"
+
+run_compose() {
+  case "$container_engine" in
+    docker) docker compose "$@" ;;
+    podman) podman compose "$@" ;;
+  esac
+}
+
+run_container() {
+  "$container_engine" run "$@"
+}
 
 case "$hosted_api_environment" in
   production)
@@ -107,6 +141,7 @@ verify_release_identity() {
     return 1
   }
   candidate_id="${candidate##*/}"
+  require_current_assets="${2:-false}"
   for asset in index.mjs compose.yml deploy-bundle.sh release.manifest release.sha256; do
     [ -f "$candidate/$asset" ] && [ ! -L "$candidate/$asset" ] || {
       echo "release 缺少普通文件：$asset" >&2
@@ -118,26 +153,42 @@ verify_release_identity() {
     echo 'release id 与 manifest 摘要不一致' >&2
     return 1
   }
+  manifest_lines="$(wc -l < "$candidate/release.manifest" | tr -d ' ')"
+  case "$manifest_lines" in
+    3|4|5|6) ;;
+    *) echo 'release manifest 不是可迁移格式' >&2; return 1 ;;
+  esac
+  if [ "$require_current_assets" = true ] && [ "$manifest_lines" -ne 6 ]; then
+    echo 'candidate release 必须包含本地对象备份资产' >&2
+    return 1
+  fi
   for asset in index.mjs compose.yml deploy-bundle.sh; do
     [ "$(grep -Ec "^[0-9a-f]{64}  ${asset}$" "$candidate/release.manifest")" -eq 1 ] \
       || return 1
   done
+  if [ "$manifest_lines" -eq 6 ]; then
+    for asset in backup-local-objects.sh mahoshojo-local-object-backup.service mahoshojo-local-object-backup.timer; do
+      [ -f "$candidate/$asset" ] && [ ! -L "$candidate/$asset" ] || return 1
+      [ "$(grep -Ec "^[0-9a-f]{64}  ${asset}$" "$candidate/release.manifest")" -eq 1 ] \
+        || return 1
+    done
+  fi
   (cd "$candidate" && sha256sum -c release.sha256 >/dev/null)
 }
 
 verify_release() {
   candidate="$1"
-  verify_release_identity "$candidate" || return 1
-  [ "$(wc -l < "$candidate/release.manifest" | tr -d ' ')" -eq 3 ] || return 1
+  verify_release_identity "$candidate" true || return 1
+  [ "$(wc -l < "$candidate/release.manifest" | tr -d ' ')" -eq 6 ] || return 1
   (cd "$candidate" && sha256sum -c release.manifest >/dev/null)
 }
 
 verify_previous_release() {
   candidate="$1"
-  verify_release_identity "$candidate" || return 1
+  verify_release_identity "$candidate" false || return 1
   manifest_lines="$(wc -l < "$candidate/release.manifest" | tr -d ' ')"
   case "$manifest_lines" in
-    3) ;;
+    3|6) ;;
     4)
       [ "$(grep -Ec '^[0-9a-f]{64}  legacy-layout$' "$candidate/release.manifest")" -eq 1 ] \
         && [ -f "$candidate/legacy-layout" ] \
@@ -197,9 +248,9 @@ validate_arena_room_runtime_allowed_origins() {
 
 validate_release_config() {
   candidate="$1"
-  HONO_RELEASE_DIR="$candidate" docker compose \
+  HONO_DEPLOY_ROOT_DIR="$root_dir" HONO_RELEASE_DIR="$candidate" run_compose \
     --project-directory "$root_dir" -f "$candidate/compose.yml" config >/dev/null
-  docker run --rm \
+  HONO_DEPLOY_ROOT_DIR="$root_dir" run_container --rm \
     --network "$redis_network_name" \
     --env-file "$runtime_env" \
     -e NODE_ENV=production \
@@ -218,7 +269,7 @@ validate_release_config() {
 
 activate_release() {
   candidate="$1"
-  HONO_RELEASE_DIR="$candidate" docker compose \
+  HONO_DEPLOY_ROOT_DIR="$root_dir" HONO_RELEASE_DIR="$candidate" run_compose \
     --project-directory "$root_dir" -f "$candidate/compose.yml" \
     up -d --force-recreate hono
   attempt=0
@@ -322,16 +373,24 @@ restore_previous() {
     return
   fi
   echo '首次发布未通过部署检查，停止 candidate' >&2
-  HONO_RELEASE_DIR="$release_dir" docker compose \
+  HONO_DEPLOY_ROOT_DIR="$root_dir" HONO_RELEASE_DIR="$release_dir" run_compose \
     --project-directory "$root_dir" -f "$release_dir/compose.yml" down
 }
 
-for command_name in base64 curl docker flock head id mktemp realpath sha256sum stat; do
+for command_name in base64 curl flock head id mktemp realpath sha256sum stat; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "部署主机缺少必需工具：$command_name" >&2
     exit 1
   }
 done
+command -v "$container_engine" >/dev/null 2>&1 || {
+  echo "部署主机缺少容器引擎：$container_engine" >&2
+  exit 1
+}
+"$container_engine" compose version >/dev/null 2>&1 || {
+  echo "容器引擎缺少 compose 子命令：$container_engine compose" >&2
+  exit 1
+}
 [ -d "$root_dir" ] && [ ! -L "$root_dir" ] \
   && [ -d "$releases_dir" ] && [ ! -L "$releases_dir" ] \
   && [ "$(realpath -e "$root_dir")" = "$root_dir" ] \
@@ -345,7 +404,11 @@ done
   echo 'Hono runtime env 必须是当前用户所有的 0600 普通文件' >&2
   exit 1
 }
-verify_release "$release_dir"
+if [ "$mode" = rollback ]; then
+  verify_previous_release "$release_dir"
+else
+  verify_release "$release_dir"
+fi
 validate_arena_room_runtime_allowed_origins "$release_dir"
 
 if [ -e "$current_link" ] || [ -L "$current_link" ]; then

@@ -56,8 +56,11 @@ jobs:
           pnpm --filter @mahoshojo/api run deploy:prepare
           cp apps/api/deploy/compose.yml apps/api/dist/compose.yml
           cp apps/api/deploy/deploy-bundle.sh apps/api/dist/deploy-bundle.sh
+          cp apps/api/scripts/backup-local-objects.sh apps/api/dist/backup-local-objects.sh
+          cp apps/api/scripts/mahoshojo-local-object-backup.service apps/api/dist/mahoshojo-local-object-backup.service
+          cp apps/api/scripts/mahoshojo-local-object-backup.timer apps/api/dist/mahoshojo-local-object-backup.timer
           cd apps/api/dist
-          sha256sum index.mjs compose.yml deploy-bundle.sh > release.manifest
+          sha256sum index.mjs compose.yml deploy-bundle.sh backup-local-objects.sh mahoshojo-local-object-backup.service mahoshojo-local-object-backup.timer > release.manifest
           sha256sum release.manifest > release.sha256
 
       - name: Upload release tuple
@@ -68,6 +71,9 @@ jobs:
             apps/api/dist/index.mjs
             apps/api/dist/compose.yml
             apps/api/dist/deploy-bundle.sh
+            apps/api/dist/backup-local-objects.sh
+            apps/api/dist/mahoshojo-local-object-backup.service
+            apps/api/dist/mahoshojo-local-object-backup.timer
             apps/api/dist/release.manifest
             apps/api/dist/release.sha256
           if-no-files-found: error
@@ -173,6 +179,9 @@ jobs:
             artifact/index.mjs \
             artifact/compose.yml \
             artifact/deploy-bundle.sh \
+            artifact/backup-local-objects.sh \
+            artifact/mahoshojo-local-object-backup.service \
+            artifact/mahoshojo-local-object-backup.timer \
             artifact/release.manifest \
             artifact/release.sha256 \
             "$VPS_USER@$VPS_HOST:$release_dir/"

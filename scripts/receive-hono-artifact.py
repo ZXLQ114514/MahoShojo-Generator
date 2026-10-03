@@ -48,14 +48,20 @@ def receive(metadata, root=Path('/opt/mahoshojo-hono')):
         if checksum.hexdigest() != digest:
             raise ValueError('artifact ZIP SHA-256 不匹配')
 
-        files = ('index.mjs', 'compose.yml', 'deploy-bundle.sh', 'release.manifest', 'release.sha256')
+        files = (
+            'index.mjs', 'compose.yml', 'deploy-bundle.sh',
+            'backup-local-objects.sh',
+            'mahoshojo-local-object-backup.service',
+            'mahoshojo-local-object-backup.timer',
+            'release.manifest', 'release.sha256',
+        )
         candidate = Path(staging) / 'release'
         candidate.mkdir(mode=0o755)
         candidate.chmod(0o755)
         with zipfile.ZipFile(archive) as bundle:
             entries = bundle.infolist()
             if sorted(entry.filename for entry in entries) != sorted(files):
-                raise ValueError('artifact 必须恰好包含五个 release 文件')
+                raise ValueError('artifact 必须恰好包含八个 release 文件')
             if sum(entry.file_size for entry in entries) > 100 * 1024 * 1024:
                 raise ValueError('artifact 解包体积过大')
             for entry in entries:
@@ -65,7 +71,10 @@ def receive(metadata, root=Path('/opt/mahoshojo-hono')):
                 (candidate / entry.filename).write_bytes(bundle.read(entry))
                 (candidate / entry.filename).chmod(0o644)
         manifest = (candidate / 'release.manifest').read_bytes()
-        expected = ''.join(f'{hashlib.sha256((candidate / name).read_bytes()).hexdigest()}  {name}\n' for name in files[:3])
+        expected = ''.join(
+            f'{hashlib.sha256((candidate / name).read_bytes()).hexdigest()}  {name}\n'
+            for name in files[:6]
+        )
         if (manifest != expected.encode() or hashlib.sha256(manifest).hexdigest() != release_id
                 or (candidate / 'release.sha256').read_text() != f'{release_id}  release.manifest\n'):
             raise ValueError('release manifest / SHA-256 不匹配')

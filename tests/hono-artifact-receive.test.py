@@ -21,7 +21,14 @@ class ReceiveTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / 'releases').mkdir()
-        self.files = {'index.mjs': b'example', 'compose.yml': b'compose', 'deploy-bundle.sh': b'#!/bin/sh\nexit 99\n'}
+        self.files = {
+            'index.mjs': b'example',
+            'compose.yml': b'compose',
+            'deploy-bundle.sh': b'#!/bin/sh\nexit 99\n',
+            'backup-local-objects.sh': b'#!/bin/sh\nexit 0\n',
+            'mahoshojo-local-object-backup.service': b'[Service]\n',
+            'mahoshojo-local-object-backup.timer': b'[Timer]\n',
+        }
         manifest = ''.join(f'{hashlib.sha256(data).hexdigest()}  {name}\n' for name, data in self.files.items()).encode()
         self.release_id = hashlib.sha256(manifest).hexdigest()
         self.files['release.manifest'] = manifest
