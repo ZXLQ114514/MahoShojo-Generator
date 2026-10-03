@@ -23,6 +23,7 @@ export type HonoServerConfig = {
   arenaRoomAllowedOrigins: string[];
   authMode: HonoAuthMode;
   arenaMultiplayerEnabled: boolean;
+  objectStorageMode: 'r2' | 'local';
   /** Dedicated Admin-to-Arena service key; never reuse public session or room-ticket signing keys. */
   adminArenaObservationSecret?: string;
 };
@@ -56,6 +57,12 @@ const hasLoopbackRedisAuthority = (value: string): boolean => {
   } catch {
     return false;
   }
+};
+
+const readObjectStorageMode = (): 'r2' | 'local' => {
+  const value = process.env.OBJECT_STORAGE_MODE?.trim() || 'r2';
+  if (value === 'r2' || value === 'local') return value;
+  throw new Error('OBJECT_STORAGE_MODE 必须是 r2 或 local');
 };
 
 const hasValidAiProviderConfig = (env: NodeJS.ProcessEnv): boolean =>
@@ -133,17 +140,22 @@ const validateProductionEnvironment = (
     problems.push('ARENA_FINALIZATION_HMAC_SECRET 必须使用独立 secret');
   }
 
-  for (const name of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'] as const) {
-    if (!hasText(env[name])) problems.push(`${name} 缺失`);
-  }
-  if (!hasText(env.R2_ACCOUNT_ID)
-    && !hasText(env.R2_ENDPOINT)
-    && !hasText(env.CF_ACCOUNT_ID)
-    && !hasText(env.CLOUDFLARE_ACCOUNT_ID)) {
-    problems.push('R2_ACCOUNT_ID/R2_ENDPOINT 缺失');
-  }
-  if (hasText(env.R2_ENDPOINT) && !isTrustedHttpsOrigin(env.R2_ENDPOINT)) {
-    problems.push('R2_ENDPOINT 必须是无凭据、路径、查询与片段的 HTTPS origin');
+  if (config.objectStorageMode === 'local') {
+    if (!hasText(env.LOCAL_OBJECTS_DIR)) problems.push('OBJECT_STORAGE_MODE=local 需要 LOCAL_OBJECTS_DIR');
+    if (!hasText(env.LOCAL_BACKUP_DIR)) problems.push('OBJECT_STORAGE_MODE=local 需要 LOCAL_BACKUP_DIR');
+  } else {
+    for (const name of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'] as const) {
+      if (!hasText(env[name])) problems.push(`${name} 缺失`);
+    }
+    if (!hasText(env.R2_ACCOUNT_ID)
+      && !hasText(env.R2_ENDPOINT)
+      && !hasText(env.CF_ACCOUNT_ID)
+      && !hasText(env.CLOUDFLARE_ACCOUNT_ID)) {
+      problems.push('R2_ACCOUNT_ID/R2_ENDPOINT 缺失');
+    }
+    if (hasText(env.R2_ENDPOINT) && !isTrustedHttpsOrigin(env.R2_ENDPOINT)) {
+      problems.push('R2_ENDPOINT 必须是无凭据、路径、查询与片段的 HTTPS origin');
+    }
   }
 
   if (config.authMode === 'hybrid') {
@@ -288,6 +300,7 @@ export const readHonoServerConfig = (): HonoServerConfig => {
     arenaRoomAllowedOrigins: readArenaRoomAllowedOrigins(),
     authMode: readHonoAuthMode(),
     arenaMultiplayerEnabled: readBoolean('ARENA_MULTIPLAYER_ENABLED', false),
+    objectStorageMode: readObjectStorageMode(),
     ...(adminArenaObservationSecret ? { adminArenaObservationSecret } : {}),
   };
   validateArenaRoomOrigins(config);

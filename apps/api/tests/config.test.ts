@@ -19,6 +19,7 @@ const stubValidBearerProductionEnv = (): void => {
   vi.stubEnv('R2_SECRET_ACCESS_KEY', 'arena-r2-secret-key');
   vi.stubEnv('R2_BUCKET_NAME', 'arena-generation-output');
   vi.stubEnv('R2_ACCOUNT_ID', 'cloudflare-account-id');
+  vi.stubEnv('OBJECT_STORAGE_MODE', 'r2');
   vi.stubEnv('BETTER_AUTH_SECRET', '');
   vi.stubEnv('BETTER_AUTH_URL', '');
 };
@@ -37,6 +38,7 @@ describe('Hono server config', () => {
       arenaRoomAllowedOrigins: ['https://mahoshojo.colanns.me'],
       redisKeyPrefix: '',
       arenaMultiplayerEnabled: false,
+      objectStorageMode: 'r2',
     });
   });
 
@@ -295,6 +297,24 @@ describe('Hono server config', () => {
     expect(() => readHonoServerConfig()).toThrow(
       /ARENA_FINALIZATION_URL.*ARENA_FINALIZATION_HMAC_SECRET.*R2_ACCESS_KEY_ID.*R2_SECRET_ACCESS_KEY.*R2_BUCKET_NAME.*R2_ACCOUNT_ID\/R2_ENDPOINT/,
     );
+  });
+
+  it('local object storage mode uses local directories instead of R2 credentials', () => {
+    stubValidBearerProductionEnv();
+    vi.stubEnv('OBJECT_STORAGE_MODE', 'local');
+    vi.stubEnv('LOCAL_OBJECTS_DIR', '/data/objects');
+    vi.stubEnv('LOCAL_BACKUP_DIR', '/data/backups');
+    vi.stubEnv('R2_ACCESS_KEY_ID', '');
+    vi.stubEnv('R2_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('R2_BUCKET_NAME', '');
+    vi.stubEnv('R2_ACCOUNT_ID', '');
+    expect(readHonoServerConfig().objectStorageMode).toBe('local');
+  });
+
+  it('拒绝未知对象存储模式，不静默回退到 R2', () => {
+    stubValidBearerProductionEnv();
+    vi.stubEnv('OBJECT_STORAGE_MODE', 'filesystem');
+    expect(() => readHonoServerConfig()).toThrow(/OBJECT_STORAGE_MODE.*r2.*local/);
   });
 
   it.each([

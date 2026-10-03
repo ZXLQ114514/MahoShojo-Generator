@@ -39,6 +39,11 @@
       "import": "./src/registration-codes.ts",
       "default": "./src/registration-codes.ts"
     },
+    "./arena-generation/local-object-store": {
+      "types": "./src/arena-generation/local-object-store.ts",
+      "import": "./src/arena-generation/local-object-store.ts",
+      "default": "./src/arena-generation/local-object-store.ts"
+    },
     "./node-runtime/default-services": {
       "types": "./src/node-runtime/default-services.ts",
       "import": "./src/node-runtime/default-services.ts",

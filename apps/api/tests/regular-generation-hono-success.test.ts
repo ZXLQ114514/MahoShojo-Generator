@@ -173,6 +173,7 @@ vi.mock('@mahoshojo/hosted-runtime/node-runtime/data-ports', () => ({
 import { createHonoApp } from '#/app';
 
 const config: HonoServerConfig = {
+  objectStorageMode: 'r2',
   arenaMultiplayerEnabled: false,
   host: '127.0.0.1',
   port: 8787,

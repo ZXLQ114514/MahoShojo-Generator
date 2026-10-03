@@ -16,6 +16,7 @@ import {
   deriveArenaGenerationId,
   ARENA_PVP_GENERATION_SIGNATURE_PURPOSE,
 } from '@mahoshojo/hosted-runtime/arena-generation';
+import { createArenaLocalObjectStoreFromEnvironment } from '@mahoshojo/hosted-runtime/arena-generation/local-object-store';
 import {
   configureArenaCompanionRouteService,
   createArenaCompanionRouteService,
@@ -73,7 +74,9 @@ export const configureHonoArenaGenerationRuntime = (
     accessClientId: process.env.CF_ACCESS_CLIENT_ID,
     accessClientSecret: process.env.CF_ACCESS_CLIENT_SECRET,
   });
-  const objectStore = createArenaR2ObjectStoreFromEnvironment();
+  const objectStore = process.env.OBJECT_STORAGE_MODE?.trim() === 'local'
+    ? createArenaLocalObjectStoreFromEnvironment()
+    : createArenaR2ObjectStoreFromEnvironment();
   const settleRatings = options.settleRatings ?? bridge!.settleRatings;
   const persistence = createNodeArenaGenerationFinalizationPorts({
     getD1Client,

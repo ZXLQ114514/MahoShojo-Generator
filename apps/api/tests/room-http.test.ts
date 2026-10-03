@@ -24,6 +24,7 @@ import type { RedisService } from '#/redis/runtime';
 import { createArenaRoomState } from './arena-room-fixtures';
 
 const config: HonoServerConfig = {
+  objectStorageMode: 'r2',
   arenaMultiplayerEnabled: true,
   host: '127.0.0.1',
   port: 8787,
