@@ -49,7 +49,7 @@ describe('G25E-2 Hosted DR fault matrix: selector/readiness/cutback', () => {
     expect(selected).toBe('next-dr');
     expect(clientRouting.origins).toEqual({
       stable: 'https://api.mahoshojo.colanns.me',
-      primary: 'https://homura.colanns.me',
+      primary: 'https://maho.archine-database.top',
       dr: 'https://mahoshojo.colanns.me',
       preview: 'https://homura-preview.colanns.me',
     });

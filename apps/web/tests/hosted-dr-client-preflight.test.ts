@@ -43,7 +43,7 @@ describe('Hosted DR client preflight selector', () => {
     expect(Object.isFrozen(decision)).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [url, init] = fetcher.mock.calls[0]!;
-    expect(url).toBe('https://homura.colanns.me/api/health/ready');
+    expect(url).toBe('https://maho.archine-database.top/api/health/ready');
     expect(init).toMatchObject({
       method: 'GET',
       cache: 'no-store',

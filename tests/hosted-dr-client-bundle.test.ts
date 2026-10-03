@@ -34,7 +34,7 @@ const runCheckerFiles = (sources: Record<string, string>) => {
 const runChecker = (source: string) => runCheckerFiles({ 'client.js': source });
 
 const routingBundle = (extra = '') => [
-  'https://homura.colanns.me',
+  'https://maho.archine-database.top',
   'https://mahoshojo.colanns.me',
   '/api/health/ready',
   '/api/hosted/dr-readiness',
@@ -272,7 +272,7 @@ describe('Hosted DR client bundle safety gate', () => {
   });
 
   it('缺少完整 client-preflight routing projection 时 fail closed', () => {
-    const result = runChecker('https://homura.colanns.me;/api/health/ready');
+    const result = runChecker('https://maho.archine-database.top;/api/health/ready');
 
     expect(result.status).toBe(1);
     expect(`${result.stdout}\n${result.stderr}`).toContain('routing projection');

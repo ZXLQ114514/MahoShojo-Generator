@@ -223,7 +223,7 @@ Arcane 单独拉取浮动 tag 更新生产容器。
 生产启动会检查以下配置并在缺失时直接失败：Redis、有效 AI provider、32 字符以上的
 `SIGNATURE_SECRET_KEY`、明确的生产 CORS、D1 Gateway 凭据（或临时使用 Cloudflare 管理 API三项凭据），
 以及 Arena terminal/finalization 所需的 `ARENA_FINALIZATION_URL`、独立且至少 32 字符的
-`ARENA_FINALIZATION_HMAC_SECRET`、R2 access key/secret/bucket/account（或显式 HTTPS endpoint）。finalization secret
+`ARENA_FINALIZATION_HMAC_SECRET`。`OBJECT_STORAGE_MODE=r2` 时还要求 R2 access key/secret/bucket/account（或显式 HTTPS endpoint）；`OBJECT_STORAGE_MODE=local` 时改为要求 `LOCAL_OBJECTS_DIR` 与 `LOCAL_BACKUP_DIR`。finalization secret
 不得复用签名、D1 Gateway 或 Better Auth secret。可设置 `HONO_CONFIG_CHECK_ONLY=true` 只执行配置预检而不监听端口。
 
 Arena 可恢复生成不新增 D1 migration。共享 Redis 持有 reservation、producer token/lease、running/finalizing、
@@ -246,15 +246,15 @@ reaper 对账，不伪造可对外读取的 failed/completed 终态。
 
 `.github/workflows/hono-deploy.yml` 继续保留受保护生产分支、Environment、SSH host key 和
 `cancel-in-progress: false`，build/container/artifact 路径只引用 `apps/api` owner。发布物由
-`index.mjs`、release-local `compose.yml` 与 `deploy-bundle.sh` 组成；`release.manifest` 覆盖这三个运行资产，
-其 SHA-256 是 release id，连同 manifest 本身构成五文件 release。生产 workflow 将本次构建的 artifact id、
+`index.mjs`、release-local `compose.yml`、`deploy-bundle.sh` 与本地对象备份资产组成；`release.manifest` 覆盖 `index.mjs`、`compose.yml`、`deploy-bundle.sh`、备份脚本及用户级 systemd unit/timer，
+其 SHA-256 是 release id，连同 manifest 与 `release.sha256` 构成八文件 release。生产 workflow 将本次构建的 artifact id、
 ZIP 摘要和 release id 传给部署 job，由 runner 使用仅含 `actions: read` 的 Actions 访问权限获取临时下载链接，
 再通过 SSH stdin 交给 VPS。GitHub token 不离开 runner，临时链接不写日志或配置文件。
-VPS 使用 HTTPS 下载压缩包，核对 ZIP 摘要和五文件 manifest，在临时目录内校验通过后才放入
+VPS 使用 HTTPS 下载压缩包，核对 ZIP 摘要和八文件 manifest，在临时目录内校验通过后才放入
 `releases/<release-id>`；同名 release 仅核对、不覆盖。下载失败最多刷新链接重试三次，校验失败直接停止。
 产物准备与执行目录内的 `deploy-bundle.sh` 分为两个步骤，重试下载不会重复部署；现有健康检查和回滚不变。
 生产拉取使用服务器已有的 Python 3 标准库，不需要 unzip、常驻 agent 或长期 GitHub token。
-preview workflow 仍使用原来的 SCP 五文件上传流程。本次不改变五文件 release 格式或引入历史 tuple 兼容层。
+preview workflow 使用同一套八文件上传流程；已有三至五行历史 manifest 仅作为 previous release 回滚兼容，不接受为新 candidate。
 
 PR、手动 Repository CI 与本地完整验收仍执行 `pnpm run ci:verify`。生产流水线并行运行
 `ci:verify:checks`（原有测试、lint 和边界检查，不重复 workspace build）、Hono 构建与类型检查、
@@ -276,8 +276,8 @@ Room request 由 `.env.hono` 的 `ARENA_MULTIPLAYER_ENABLED` 决定；workflow �
 previous release；首次发布失败则停止 candidate。
 
 脚本只保留一个非阻塞 `flock` 防止并发发布，不写 persistent journal，也不在下一次启动时推断历史事务。
-旧布局、旧 gate tuple 和 format marker 不再受支持。显式回滚直接选择仍保留在 `releases/<release-id>` 的
-五文件 release，并运行：
+旧布局、旧 gate tuple 和 format marker 不再作为新 candidate。显式回滚直接选择仍保留在 `releases/<release-id>` 的
+受校验 release，并运行：
 
 ```bash
 current_dir="$(readlink -f /opt/mahoshojo-hono/current)"
@@ -286,7 +286,7 @@ target_id='<64-hex-release-id>'
 ```
 
 回滚与普通发布使用同一套 checksum、配置与 smoke；它只切换 Hono release，不修改 Redis、D1 或 R2 数据。
-部署主机必须提供 Docker Compose、`curl`、`flock`、`mktemp`、`realpath`、`stat`、`id`、`sha256sum` 和标准
+部署主机必须提供 Podman/Docker Compose、`curl`、`flock`、`mktemp`、`realpath`、`stat`、`id`、`sha256sum` 和标准
 POSIX 工具。`.env.hono` 必须是当前部署用户所有、权限为 `0600` 的普通文件且不得为符号链接。
 
 生产切流只应将 `config/hono-api-routes.json` 中的精确路径转发到 Hono origin；其他 `/api/*` 继续访问 Next.js。前端继续使用

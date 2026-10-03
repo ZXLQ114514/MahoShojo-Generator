@@ -307,7 +307,7 @@ describe('phase 2.5A D1 Gateway workspace app', () => {
         {
           binding: 'DB',
           database_name: 'mahoshojo',
-          database_id: '8eb9b25c-5a00-4feb-b5cb-c5dd25cda1d3',
+          database_id: 'eacbb50a-73f6-4a3b-b7fc-d11a5e748bee',
           migrations_dir: '../../drizzle',
         },
       ],
